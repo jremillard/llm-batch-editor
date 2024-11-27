@@ -1,0 +1,256 @@
+# instructions for llmrun.py to convert EGGS 1989 PASCAL program to python 3.
+
+[source]
+paths = [
+    "testdata/EGGS-Turbo-Pascal-1989/*.pas",
+    "testdata/EGGS-Turbo-Pascal-1989/*.egg"
+]
+
+[target]
+directory = "output/eggs/"
+
+[defaults]
+model = "o1-mini"
+#model = "gpt-4o-mini"
+#model = "claude-3-5-sonnet-latest"
+#model = "claude-3-5-haiku-latest"
+
+[shared_prompts]
+# Reusable instruction snippets to promote consistency and reduce redundancy
+
+code_naming_and_style = """
+**Preserve Original Naming Conventions:**  
+- **Do not alter** the original **Pascal function and variable names** except for the variable cont. 
+- **cont** conversion.
+-- When cont represents a character, rename it to character_id.
+-- When cont represents an item, rename it to item_id.
+-- When cont is a loop variable used for iterating over characters or items, rename it based on the context, e.g., character_num, room_number, or item_num.
+- **Maintain exact names** without converting them to Pythonic `snake_case` or any other naming style, except cont.
+For example, a Pascal function named `GunChar` should remain `GunChar` in Python.
+"""
+
+docstrings_guidelines = """
+**Docstrings and Documentation:**
+- Create both **function-level** and **file-level docstrings** that **reference the original Pascal code filename**.
+- Ensure that all docstrings adhere to PEP 257 conventions for clarity and consistency.
+- **file-level docstrings** must **only** summarize the file. It must **not** list all the functions in the module.
+- Examples
+    <module doc string example>
+    This module contains functions converted from the (original pascal source file name) Pascal source file.
+    (summary of what the functions do in this file)
+- **function-level** must have a summary of what function does and include references to original pascal function.
+    <function doc string example>
+    Created from (original pascal procedure name) procedure in (pascal source file name).
+    Summary of what the function does.
+    Args:
+        name, type : Summary of the parameters.
+"""
+
+import_and_referencing = """
+**Imports and Dependencies:**
+- **Global Variables:** Use `import globals as gbl` to access global variables. 
+- **External Modules:** When calling functions from other Eggs modules, **reference them explicitly** using the `<module>.function` format.
+- **Data Files:** **Read from CSV files** as defined in `globals.py`, **not** from EGG files.
+- **Imports Order:** The import statements for the game files such as globals should be after the imports for the built in python modules, such as random, os, and csv.
+"""
+
+constants_replacement = """
+**Constants and Variables:**
+- **Replace Hard-Coded Numbers:**  
+- Replace any **hard-coded numbers** with the **predefined constants** (`glb.ROOM_<NUMBER>_*`, `gbl.CHAR_<NUMBER>_*`, `gbl.ITEM_<NUMBER>_*`, `gbl.DIR_`) defined in `globals.py`.
+- **Reference Constants Correctly:** Use `gbl.CONSTANT_NAME` to reference all constants accurately.
+"""
+
+complete_conversion = """
+**Completion and Verification:**
+- **Complete All Conversions:**  
+- **Verify** that **every function and procedure** has a corresponding **converted function** in the python file.
+- **Consistent Naming:** Ensure that the **naming conventions remain consistent** throughout the module, matching those of the original Pascal code.
+"""
+
+pylint = """
+Fix errors in {{filename}}.
+Output the entire {{filename}} file if any problems are found by pylint, do not output just the corrected code.
+If no problems are found in the {{filename}}, don't output any code blocks.
+"""
+
+use_type_hinting = """
+Apply Python type hinting to all functions and variables for improved code clarity and type safety.
+"""
+
+[[commands]]
+id = "create_converteggstocsv"
+type = "llm_create"
+target_files = ["converteggstocsv.py"]
+instruction = """
+Write a Python program {{filename}} to convert the binary CHARNAM.EGG,CHARNUM.EGG,ITEMNAM.EGG
+ITEMNUM.EGG, LOOKSMAR.EGG, ROOM.EGG, SAYINGS.EGG, TALKNUM.EGG, TALKSTR.EGG files into CSV text files. 
+When it makes sense, merge multiple EGG files into one CSV file.
+The program should be very verbose with its output, to make debugging easy.
+The strings are encoded as Pascal string and are not null-terminated.
+"""
+context = ["*.pas", "*.egg" ]
+
+[[commands]]
+id = "run_converteggstocsv"
+type = "llm_feedback_edit"
+target_files = ["converteggstocsv.py"]
+instruction = """
+Correct any errors in {{filename}}.
+Ensure that all CSV files are correct and complete compared to the EGG files.
+Output the entire file {{filename}} with correction if any problems are found in the CSVs. 
+Otherwise don't respond with any python code.
+----------------------------------------------------------------
+{{output}}
+"""
+test_commands = ["del *.csv", "python converteggstocsv.py"]
+max_retries = 4
+context = ["*.csv", "*.egg", "*.pas" ]
+
+[[commands]]
+id = "create_globals"
+type = "llm_create"
+target_files = ["globals.py"]
+instruction = """
+**Create** a Python module named `globals.py` that contains all the global variables extracted from the Pascal code **excluding** file handle global variables.
+**Retain** the exact same global variable names as used in the Pascal code to ensure compatibility and ease of reference.
+**Do not** modify global variable names to conform to standard Python naming conventions.
+**Do not** convert any functions from setup.py 
+Create file-level docstrings.
+Ensure that all docstrings adhere to PEP 257 conventions for clarity and consistency.
+
+**Global Variables Definition**:
+   - **Define** all necessary global variables excluding file handle variables.
+   - **Initialize** variables appropriately unless the data is loaded from a CVS file.
+
+**Additional Notes**:
+   - **Exclude** any initialization procedures or examples that were previously included, such as references to `setup()` functions.
+   - **Ensure** that all constants and variables are well-documented with clear and concise comments to facilitate understanding and maintenance.
+
+{{use_type_hinting}}
+"""
+context = ["*.pas", "*.csv"]
+
+[[commands]]
+id = "constants_globals"
+type = "llm_edit"
+target_files = ["globals.py"]
+instruction = """
+Update {{filename}} to include additional constants to help eliminate magic numbers from the code.
+
+**Add** descriptive constants for all rooms, characters, and items based on the provided CSV files and PAS files to {{filename}}.
+
+**Rooms**: Prefix with `ROOM_<ROOM_NUMBER>_DESCRIPTION`. 
+    Generate constants for **all rooms**. 
+    ROOM_NUMBER is the room numerical ID [0-9]*. 
+    **Reference** the roomdescrip PASCAL function in roomdes.pas file to create accurate room constant names. Double check this.
+
+**Characters**: Prefix with `CHAR_<CHARACTER_NUMBER>_DESCRIPTION`. 
+  CHARACTER_NUMBER is the item numerical ID [0-9]*
+
+**Items**: Prefix with `ITEM_<ITEM_NUMBER>_DESCRIPTION`. 
+  ITEM_NUMBER is the item numerical ID [0-9]*
+
+**Directions**: Prefix with `DIR_`.
+
+**Example**:
+    ROOM_1_YOUR_HOUSE: int = 1 
+    ...
+    ROOM_23_YELLOW_HOUSE: int = 23 
+    ... Continue for all rooms, do not skip any rooms. ID must be set to the room number.
+
+    # Constants for Characters (from characters.csv)
+    CHAR_1_JOHN: int = 1
+    CHAR_2_KEVIN: int = 2
+    # ... Continue for all characters
+
+    # Constants for Items (from items.csv)
+    ITEM_1_EGG: int = 1
+    ITEM_2_SAW: int = 2
+    # ... Continue for all items
+
+    # Direction Constants
+    DIR_NORTH: int = 1
+    DIR_SOUTH: int = 2
+    # ...
+
+{{use_type_hinting}}
+"""
+context = ["*.pas", "*.csv"]
+
+
+[[commands]]
+id = "lint_globals"
+type = "llm_feedback_edit"
+target_files = ["globals.py" ]
+instruction = """
+{{pylint}}
+{{output}}
+"""
+test_commands = ["pylint --disable=W,C,R {{filename}}"]
+max_retries = 5
+context = ["*.csv", "*.pas"]
+
+[[commands]]
+id = "create_midlevel"
+type = "llm_create"
+target_files = [   
+    "bang.py", 
+    "burn.py", "cream.py", "debug.py", "help.py", "move.py",
+    "roomdes.py", "saw.py", "drop.py", "saywhat.py", "throw.py", "tie.py", 
+    "setup.py"
+]
+instruction = """
+Using the file {{filename_base}}.PAS as a reference, create a Python module named {{filename}}
+{{complete_conversion}}
+{{code_naming_and_style}}
+{{docstrings_guidelines}}
+{{import_and_referencing}}
+{{constants_replacement}}
+{{use_type_hinting}}
+"""
+context = ["globals.py", "*.pas", "*.csv"]
+
+[[commands]]
+id = "create_eggs"
+type = "llm_create"
+target_files = ["eggs.py"]
+instruction = """
+Using the file {{filename_base}}.PAS as a reference, create a Python module named {{filename}}
+{{complete_conversion}}
+{{code_naming_and_style}}
+{{docstrings_guidelines}}
+{{import_and_referencing}}
+{{constants_replacement}}
+{{use_type_hinting}}
+"""
+context = ["*.pas", "bang.py", "burn.py", "cream.py", "debug.py", "help.py", "move.py",
+    "roomdes.py", "saw.py", "drop.py", "saywhat.py", "throw.py", "tie.py", 
+    "setup.py", "globals.py","*.csv"]
+
+
+[[commands]]
+id = "lint_py_files"
+type = "llm_feedback_edit"
+target_files = [
+    "bang.py", "burn.py", "cream.py", "debug.py", "help.py", "move.py",
+    "roomdes.py", "saw.py", "drop.py", "saywhat.py", "throw.py", "tie.py",
+    "eggs.py"
+]
+instruction = """
+{{pylint}}
+{{output}}
+"""
+test_commands = ["pylint --disable=W,C,R {{filename}}"]
+max_retries = 5
+context = ["*.py", "*.csv","*.pas"]
+
+[[commands]]
+id = "create_csvfileformat_md"
+type = "llm_create"
+target_files = ["csvfileformat.md"]
+instruction = """
+Write an MD document {{filename}} describing the format of the CSV files generated by converteggstocsv.py.
+Describe how the CSV files relate to the binary Pascal EGG files.
+"""
+context = ["converteggstocsv.py", "*.csv", "*.egg", "*.pas"]
