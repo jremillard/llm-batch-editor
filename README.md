@@ -12,15 +12,7 @@ Licensed under the MIT License.
 
 ## Dependencies
 
-- **Python 3.8+**: Ensure you have Python 3.8 or higher installed.
-- **pip**: Python package installer.
-
-**Required Python Packages:**
-- `openai`
-- `requests`
-- `toml`
-- `pytest`
-
+Python 3.8+ is required. 
 You can install the required packages using the following command:
 ```bash
 pip install -r requirements.txt
@@ -29,6 +21,6 @@ pip install -r requirements.txt
 
 **Usage:**
 ```bash
-python [llmrun.py](http://_vscodecontentref_/1) instructions.toml command1 [command2] ...
+python [llmrun.py] instructions.toml command1-ids [command2-ids] ...
 ```
 
