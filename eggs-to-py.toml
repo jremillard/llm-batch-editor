@@ -1,11 +1,5 @@
 # instructions for llmrun.py to convert EGGS 1989 PASCAL program to python 3.
 
-[source]
-paths = [
-    "testdata/EGGS-Turbo-Pascal-1989/*.pas",
-    "testdata/EGGS-Turbo-Pascal-1989/*.egg"
-]
-
 [target]
 directory = "output/eggs/"
 

@@ -34,27 +34,16 @@ The instruction file is structured using [TOML](https://toml.io/en/) (Tom's Obvi
 
 ### 1. Directives
 
-Directives define the source and target configurations for the commands.
+Directives target directory for the commands.
 
 ```toml
-[source]
-paths = ["src/*.py", "src/*.md"]
 
 [target]
 directory = "output"
 ```
-
-- **`source.paths`**
-  - **Type:** Array of strings
-  - **Description:** Specifies source files or patterns to include. Patterns are resolved relative to the instruction file location.
-  - **Example:**
-    ```toml
-    source.paths = ["src/*.py", "src/*.md"]
-    ```
-
 - **`target.directory`**
   - **Type:** String
-  - **Description:** Specifies the output directory for generated files. The target directory will be created if it does not exist.
+  - **Description:** Specifies the output directory for project. The target directory will be created if it does not exist. Note, software will edit and overwrite the files in this directory, please keep a backup.
   - **Example:**
     ```toml
     target.directory = "output"
@@ -420,26 +409,7 @@ Include proper comments explaining the code.
 
 ---
 
-## Source and Target Directives
-
-### Source Directive
-
-```toml
-[source]
-paths = ["src/*.py", "src/*.md"]
-```
-
-**Processing:**
-- **`source.paths`**: Source files are copied from the specified paths to the target directory.
-- Patterns are resolved relative to the instruction file's location.
-- Files are only copied if the target directory is created or is empty.
-
-**Example:**
-```toml
-source.paths = ["src/*.py", "src/*.md"]
-```
-
-### Target Directive
+## Target Directive
 
 ```toml
 [target]
@@ -649,8 +619,6 @@ To ensure the integrity and correctness of the instruction files and command exe
 ### **Instructions with Macros and Enhanced `{{filename}}` Token (`sample-instructions.toml`)**
 
 ```toml
-[source]
-paths = ["src/*.py", "src/*.md"]
 
 [target]
 directory = "output"
@@ -702,9 +670,6 @@ context = ["*.py", "*.md"]
 ### **Instructions for Adding Unit Tests with Shared Prompts and Default Model (`add-unit-tests.toml`)**
 
 ```toml
-[source]
-paths = ["src/*.py"]
-
 [target]
 directory = "test"
 
@@ -776,9 +741,6 @@ context = [""]
 ### **Instructions for Converting Managed C++ to C# with Shared Prompts and Default Model (`cpp-to-cs.toml`)**
 
 ```toml
-[source]
-paths = ["src/*.cpp"]
-
 [target]
 directory = "csharp"
 merge = true

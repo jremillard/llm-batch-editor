@@ -4,6 +4,7 @@ import logging
 from pathlib import Path
 import toml
 from LLMRunError import LLMRunError
+from LLMBot import LLMBot
 
 
 # Constants for built-in macros
@@ -52,7 +53,7 @@ class InstructionParser:
     def validate_commands(self):
         commands = self.data.get("commands", [])
         defaults = self.data.get("defaults", {})
-        supported_models = {"o1-mini", "o1-preview","gpt-4o","gpt-4o-mini","claude-3-5-sonnet-latest","claude-3-5-haiku-latest"}  # Extend as needed
+        supported_models = LLMBot.get_supported_models()
         for index, cmd in enumerate(commands, start=1):
             cmd_id = cmd.get("id", f"<command at position {index}>")
             cmd_type = cmd.get("type")

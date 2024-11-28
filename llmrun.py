@@ -469,9 +469,7 @@ def main():
         data = parser_obj.get_data()
 
         # Process directives
-        source_paths = data.get("source", {}).get("paths", [])
         target_directory = Path(data.get("target", {}).get("directory", "output")).resolve()
-        copy_source_files(source_paths, target_directory)
 
         # Initialize MacroResolver
         shared_prompts = data.get("shared_prompts", {})

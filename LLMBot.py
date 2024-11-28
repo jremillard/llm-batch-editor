@@ -14,12 +14,19 @@ class LLMBot:
     def __init__(self, max_retries: int = 3, retry_delay: int = 5):
         self.max_retries = max_retries
         self.retry_delay = retry_delay
+
         # List of LLM models that do not support the 'role' key in messages
         self.models_without_role_key = {"o1-mini", "o1-preview"}
-        # Initialize OpenAI client
+        self.openai_models = {"o1-mini", "o1-preview", "gpt-4o", "gpt-4o-mini"}
+        self.anthropic_models = {"claude-3-5-sonnet-latest", "claude-3-5-haiku-latest"}
 
-        self.clientOpenAI = OpenAI()
-        self.clientAnthropic = Anthropic(timeout=120.0)
+        # Initialize clients as None for lazy instantiation
+        self.clientOpenAI = None
+        self.clientAnthropic = None
+
+    @classmethod
+    def get_supported_models(cls):
+        return cls.openai_models.union(cls.anthropic_models)
 
     def get_response(self, prompt: List[Dict[str, str]], model: str) -> str:
         """
@@ -47,11 +54,13 @@ class LLMBot:
                 logging.debug(f"Sending prompt to LLM (Attempt {attempt}): {prompt[-1].get('content', '')[:50]}...")
 
                 content = ""
-                if ( model in ["gpt-4o-mini" ,"o1-mini","o1-preview"] ):
+                if model in self.openai_models:
                     content = self.get_response_openAI(prompt, model)
+                elif model in self.anthropic_models:
+                    content = self.get_response_antropic(prompt, model)
                 else:
-                    content = self.get_response_antropic( prompt, model)
-                
+                    raise ValueError(f"Unsupported model: {model}")
+
                 logging.debug(f"Received response from LLM: {content[:50]}...")
 
                 # Overwrite the last item as the assistant response
@@ -70,7 +79,8 @@ class LLMBot:
                     raise LLMRunError(f"LLM API call failed after {self.max_retries} attempts: {e}")
 
     def get_response_antropic(self, prompt: List[Dict[str, str]], model: str) -> str:
-         
+        if self.clientAnthropic is None:
+            self.clientAnthropic = Anthropic(timeout=120.0)
         response = self.clientAnthropic.messages.create(
             max_tokens=8000,
             model=model,
@@ -85,7 +95,8 @@ class LLMBot:
         return content
 
     def get_response_openAI(self, prompt: List[Dict[str, str]], model: str) -> str:
-
+        if self.clientOpenAI is None:
+            self.clientOpenAI = OpenAI()
         # Ensure the prompt starts with a system message if it is not already present
         if not prompt or prompt[0].get('role') != 'system':
             if model not in self.models_without_role_key:
