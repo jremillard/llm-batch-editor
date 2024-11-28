@@ -10,412 +10,14 @@ import time
 import re
 import traceback
 import concurrent.futures
-import toml
 import json
-from openai import OpenAI
-from anthropic import Anthropic
 
-# Constants for built-in macros
-BUILT_IN_MACROS = {"filename", "output", "filelist", "filename_base"}
-
-# List of binary file extensions for 'filelist' macro
-BINARY_EXTENSIONS = {
-    ".exe",
-    ".dll",
-    ".bin",
-    ".dat",
-    ".pdf",
-    ".jpg",
-    ".jpeg",
-    ".png",
-    ".gif",
-    ".bmp",
-    ".iso",
-    ".tar",
-    ".gz",
-    ".zip",
-    ".7z",
-    ".rar",
-    ".so",
-    ".dylib",
-    ".class",
-    ".jar",
-    ".egg"
-    # Add more as needed
-}
-
-
-class LLMRunError(Exception):
-    """Custom exception for llmrun errors."""
-    pass
-
-
-class InstructionParser:
-    """Parses and validates the instruction TOML file."""
-
-    def __init__(self, instruction_path: Path):
-        self.instruction_path = instruction_path
-        self.instruction_dir = instruction_path.parent
-        self.data = self.load_toml()
-        self.validate_unique_command_ids()
-        self.validate_macros()
-        self.validate_commands()
-
-    def load_toml(self) -> Dict[str, Any]:
-        try:
-            with open(self.instruction_path, 'r') as f:
-                data = toml.load(f)
-            logging.debug(f"Successfully loaded TOML file: {self.instruction_path}")
-            return data
-        except Exception as e:
-            raise LLMRunError(f"Failed to load TOML file: {e}")
-
-    def validate_unique_command_ids(self):
-        commands = self.data.get("commands", [])
-        seen_ids = set()
-        for cmd in commands:
-            cmd_id = cmd.get("id")
-            if not cmd_id:
-                raise LLMRunError("A command is missing the required 'id' field.")
-            if cmd_id in seen_ids:
-                raise LLMRunError(f"Duplicate command id found: '{cmd_id}'. Each command must have a unique 'id'.")
-            seen_ids.add(cmd_id)
-        logging.debug("All command IDs are unique.")
-
-    def validate_macros(self):
-        shared_prompts = self.data.get("shared_prompts", {})
-        for macro_name in shared_prompts:
-            if macro_name in BUILT_IN_MACROS:
-                raise LLMRunError(f"Macro name conflict: '{macro_name}' is a reserved built-in macro name.")
-        logging.debug("All custom macros are validated and no conflicts found.")
-
-    def validate_commands(self):
-        commands = self.data.get("commands", [])
-        defaults = self.data.get("defaults", {})
-        supported_models = {"o1-mini", "o1-preview","gpt-4o","gpt-4o-mini","claude-3-5-sonnet-latest","claude-3-5-haiku-latest"}  # Extend as needed
-        for index, cmd in enumerate(commands, start=1):
-            cmd_id = cmd.get("id", f"<command at position {index}>")
-            cmd_type = cmd.get("type")
-            if not cmd_type:
-                raise LLMRunError(f"Command '{cmd_id}' is missing the required 'type' field.")
-
-            # Check for required general fields
-            for field in ["id", "type", "target_files", "instruction"]:
-                if field not in cmd:
-                    raise LLMRunError(f"Command '{cmd_id}' is missing the required '{field}' field.")
-
-            # Specific validations per command type
-            if cmd_type == "llm_create":
-                if "context" not in cmd:
-                    raise LLMRunError(f"Command '{cmd_id}' of type 'llm_create' must include 'context'.")
-            elif cmd_type == "llm_edit":
-                # 'context' is optional but recommended
-                pass
-            elif cmd_type == "llm_feedback_edit":
-                if "test_commands" not in cmd:
-                    raise LLMRunError(f"Command '{cmd_id}' of type 'llm_feedback_edit' must include 'test_commands'.")
-                if "max_retries" not in cmd:
-                    raise LLMRunError(f"Command '{cmd_id}' of type 'llm_feedback_edit' must include 'max_retries'.")
-                instruction = cmd.get("instruction", "")
-                if "{{output}}" not in instruction:
-                    raise LLMRunError(f"Command '{cmd_id}' of type 'llm_feedback_edit' must include '{{{{output}}}}' in 'instruction'.")
-            else:
-                raise LLMRunError(f"Unsupported command type: '{cmd_type}' in command '{cmd_id}'.")
-
-            # Validate model if specified
-            model = cmd.get("model", defaults.get("model"))
-            if model and model not in supported_models:
-                raise LLMRunError(f"Unsupported model '{model}' specified in command '{cmd_id}'. Supported models: {supported_models}")
-
-            # Validate other fields
-            if not isinstance(cmd.get("target_files"), list) or not all(isinstance(f, str) for f in cmd.get("target_files")):
-                raise LLMRunError(f"'target_files' in command '{cmd_id}' must be an array of strings.")
-            if "context" in cmd:
-                if not isinstance(cmd.get("context"), list) or not all(isinstance(c, str) for c in cmd.get("context")):
-                    raise LLMRunError(f"'context' in command '{cmd_id}' must be an array of strings.")
-            if cmd_type == "llm_feedback_edit":
-                if not isinstance(cmd.get("test_commands"), list) or not all(isinstance(tc, str) for tc in cmd.get("test_commands")):
-                    raise LLMRunError(f"'test_commands' in command '{cmd_id}' must be an array of strings.")
-                if not isinstance(cmd.get("max_retries"), int) or cmd.get("max_retries") <= 0:
-                    raise LLMRunError(f"'max_retries' in command '{cmd_id}' must be a positive integer.")
-
-        logging.debug("All commands are validated successfully.")
-
-    def get_data(self) -> Dict[str, Any]:
-        return self.data
-
-
-class MacroResolver:
-    """Resolves macros within instructions."""
-
-    def __init__(self, shared_prompts: Dict[str, str]):
-        self.shared_prompts = shared_prompts
-
-    def resolve_shared_prompts(self, text: str) -> str:
-        """
-        Replace shared prompts in the instruction text.
-        """
-        def replace_shared_prompt(match):
-            macro = match.group(1)
-            if macro in self.shared_prompts:
-                return self.shared_prompts[macro]
-            return match.group(0)  # Leave it unchanged if not a shared prompt
-
-        return re.sub(r"\{\{(\w+)\}\}", replace_shared_prompt, text.strip())
-
-    def resolve_placeholders(self, text: str, placeholders: Dict[str, str]) -> str:
-        """
-        Replace built-in macros in the instruction text.
-        """
-        for key, value in placeholders.items():
-            text = text.replace(f"{{{{{key}}}}}", value.strip())
-        return text
-
-    def resolve(self, text: str, placeholders: Dict[str, str]) -> str:
-        """
-        Resolve shared prompts and built-in macros in the given text.
-        """
-        text = self.resolve_shared_prompts(text)
-        text = self.resolve_placeholders(text, placeholders)
-        return text
-
-
-class ContextManager:
-    """Manages context gathering based on file patterns."""
-
-    def __init__(self, target_directory: Path):
-        self.target_directory = target_directory
-
-    def generate_filelist(self) -> str:
-        """
-        Generates a list of files in the target directory with their sizes.
-        Excludes 'log' and '__pycache__' directories.
-        For binary files, includes a snippet of their content.
-        """
-        filelist = ["LIST OF FILE"]
-        for root, dirs, files in os.walk(self.target_directory):
-            # Exclude 'log' and '__pycache__' directories
-            dirs[:] = [d for d in dirs if d not in ("log", "__pycache__")]
-            for file in files:
-                file_path = Path(root) / file
-                rel_path = file_path.relative_to(self.target_directory)
-                size = file_path.stat().st_size
-                entry = f"{rel_path} - {size} bytes"
-                filelist.append(entry)
-        return "\n".join(filelist)
-
-    def gather_context(self, patterns: List[str]) -> List[str]:
-        """
-        Gathers context items based on glob patterns.
-        """
-        context_items = []
-        for pattern in patterns:
-            # Handle special tokens like {{filelist}}
-            if pattern == "{{filelist}}":
-                context_items.append(self.generate_filelist())
-                continue
-            # Resolve glob patterns relative to target directory
-            matched_files = list(self.target_directory.glob(pattern))
-            for file_path in matched_files:
-                if file_path.is_file():                        
-                    context_items.append('-'*80)
-                    context_items.append(f"File: {os.path.relpath(file_path, self.target_directory)}")
-                    context_items.append('-'*80)
-
-                    if file_path.suffix.lower() in BINARY_EXTENSIONS:
-                        try:
-                            with open(file_path, 'rb') as f:
-                                while True:
-                                    chunk = f.read(40)
-                                    if not chunk:
-                                        break
-
-                                    # Generate the ASCII part (dots for non-printable characters)
-                                    ascii_part = ''.join(chr(byte) if 32 <= byte <= 126 else '.' for byte in chunk)
-
-                                    # Generate the hex part
-                                    hex_part = ' '.join(f"{byte:02x}" for byte in chunk)
-
-                                    # Combine ASCII and hex parts
-                                    line = f"{ascii_part:<40} {hex_part}"
-                                    context_items.append( line)
-                        except Exception as e:
-                            entry += f"\n  [Error reading binary file: {e}]"
-                    else:
-                        try:
-                            with open(file_path, 'r', encoding='utf-8') as f:
-                                content = f.read()
-                            context_items.append(content)
-                        except Exception:
-                            # If binary or unreadable, skip or handle accordingly
-                            context_items.append(f"[Binary or unreadable file: {file_path}]")
-        return context_items
-
-
-class LLMBot:
-    """Interfaces with the LLM API."""
-
-    def __init__(self, max_retries: int = 3, retry_delay: int = 5):
-        self.max_retries = max_retries
-        self.retry_delay = retry_delay
-        # List of LLM models that do not support the 'role' key in messages
-        self.models_without_role_key = {"o1-mini", "o1-preview"}
-        # Initialize OpenAI client
-
-        self.clientOpenAI = OpenAI()
-        self.clientAnthropic = Anthropic(timeout=120.0)
-
-    def get_response(self, prompt: List[Dict[str, str]], model: str) -> str:
-        """
-        Sends a prompt to the LLM and returns the response.
-        If conversation history is provided, includes it for context-aware responses.
-        Implements retry logic on failure.
-
-        :param prompt: A list of dictionaries containing conversation messages with required keys "role" and "content".
-                       Valid values for "role" are "system", "user", or "assistant".
-        :param model: The model to use for the LLM API.
-        :return: The response from the LLM.
-        """
-
-        # Ensure all dictionaries in prompt contain only 'role' and 'content' keys
-        for message in prompt:
-            if set(message.keys()) - {"role", "content"}:
-                raise ValueError("Each message in the prompt must only contain 'role' and 'content' keys.")
-
-        # Prepare the prompt for sending: raise an error if the last item has the role 'assistant'
-        if prompt[-1].get('role') == 'assistant':
-            raise ValueError("The last item in the prompt cannot have the role 'assistant' before sending to the LLM.")
-
-        for attempt in range(1, self.max_retries + 1):
-            try:
-                logging.debug(f"Sending prompt to LLM (Attempt {attempt}): {prompt[-1].get('content', '')[:50]}...")
-
-                content = ""
-                if ( model in ["gpt-4o-mini" ,"o1-mini","o1-preview"] ):
-                    content = self.get_response_openAI(prompt, model)
-                else:
-                    content = self.get_response_antropic( prompt, model)
-                
-                logging.debug(f"Received response from LLM: {content[:50]}...")
-
-                # Overwrite the last item as the assistant response
-                if model not in self.models_without_role_key:
-                    prompt[-1] = {"role": "assistant", "content": content}
-                else:
-                    prompt[-1] = {"content": content}
-
-                return content
-
-            except Exception as e:
-                logging.warning(f"LLM API call failed on attempt {attempt}: {e}")
-                if attempt < self.max_retries:
-                    time.sleep(self.retry_delay)
-                else:
-                    raise LLMRunError(f"LLM API call failed after {self.max_retries} attempts: {e}")
-
-    def get_response_antropic(self, prompt: List[Dict[str, str]], model: str) -> str:
-         
-        response = self.clientAnthropic.messages.create(
-            max_tokens=8000,
-            model=model,
-            messages=prompt
-        )
-
-        content = ""
-        if hasattr(response, "content"):
-            content = "".join(
-                block.text for block in response.content if hasattr(block, "text")
-            )
-        return content
-
-    def get_response_openAI(self, prompt: List[Dict[str, str]], model: str) -> str:
-
-        # Ensure the prompt starts with a system message if it is not already present
-        if not prompt or prompt[0].get('role') != 'system':
-            if model not in self.models_without_role_key:
-                prompt.insert(0, {"role": "system", "content": "You are expert software engineer from MIT."})
-
-        completion = self.clientOpenAI.chat.completions.create(
-            model=model,
-            messages=prompt
-        )
-
-        content = completion.choices[0].message.content
-
-        return content
-
-
-class LoggerManager:
-    """Manages logging for the application."""
-
-    def __init__(self, log_dir: Path, debug: bool = False):
-        self.log_dir = log_dir
-        self.log_dir.mkdir(parents=True, exist_ok=True)
-        self.setup_root_logger(debug=debug)
-
-    def setup_root_logger(self, debug: bool):
-        level = logging.DEBUG if debug else logging.INFO
-        logging.basicConfig(
-            level=level,
-            format="%(asctime)s [%(levelname)s] %(message)s",
-            handlers=[
-                logging.StreamHandler(sys.stdout)
-            ]
-        )
-
-    def setup_command_logger(self, command_id: str) -> logging.Logger:
-        """
-        Sets up a logger for a specific command, writing to <command_id>.log.
-        """
-        logger = logging.getLogger(command_id)
-        logger.setLevel(logging.DEBUG)
-
-        # Remove existing handlers to avoid duplicate logs
-        if logger.hasHandlers():
-            logger.handlers.clear()
-
-        # Create file handler
-        log_file = self.log_dir / f"{command_id}.log"
-        fh = logging.FileHandler(log_file, mode='w', encoding='utf-8')
-        fh.setLevel(logging.DEBUG)
-
-        formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
-        fh.setFormatter(formatter)
-        logger.addHandler(fh)
-
-        return logger
-
-    def setup_file_loggers(self, command_id: str, file_name: str) -> Dict[str, logging.Logger]:
-        """
-        Sets up loggers for LLM prompt and output for a specific file.
-        Returns a dictionary with 'prompt' and 'output' loggers.
-        """
-        prompt_logger = logging.getLogger(f"{command_id}.{file_name}.llm-prompt")
-        output_logger = logging.getLogger(f"{command_id}.{file_name}.llm-output")
-
-        # Remove existing handlers
-        if prompt_logger.hasHandlers():
-            prompt_logger.handlers.clear()
-        if output_logger.hasHandlers():
-            output_logger.handlers.clear()
-
-        # Prompt logger
-        prompt_file = self.log_dir / f"{command_id}.{file_name}.llm-prompt.txt"
-        ph = logging.FileHandler(prompt_file, mode='w', encoding='utf-8')
-        ph.setLevel(logging.DEBUG)
-        ph.setFormatter(logging.Formatter("%(message)s"))
-        prompt_logger.addHandler(ph)
-        prompt_logger.propagate = False
-
-        # Output logger
-        output_file = self.log_dir / f"{command_id}.{file_name}.llm-output.txt"
-        oh = logging.FileHandler(output_file, mode='w', encoding='utf-8')
-        oh.setLevel(logging.DEBUG)
-        oh.setFormatter(logging.Formatter("%(message)s"))
-        output_logger.addHandler(oh)
-        output_logger.propagate = False
-
-        return {"prompt": prompt_logger, "output": output_logger}
+import LLMBot
+import InstructionParser
+import LoggerManager
+import ContextManager
+import MacroResolver
+from LLMRunError import LLMRunError
 
 
 class CommandExecutor:
@@ -842,19 +444,6 @@ def copy_files(patterns: List[str], target_dir: Path):
                 logging.debug(f"Copied '{src}' to '{dest}'.")
 
 
-def setup_logging(target_dir: Path, debug: bool = False) -> LoggerManager:
-    """
-    Sets up logging by creating the 'log' directory within the target directory.
-
-    :param target_dir: Path object representing the target directory.
-    :param debug: Boolean flag to enable debug logs to console.
-    :return: Initialized LoggerManager instance.
-    """
-    log_dir = target_dir / "log"
-    log_dir.mkdir(parents=True, exist_ok=True)
-    return LoggerManager(log_dir, debug=debug)
-
-
 def main():
     # Parse command-line arguments
     parser = argparse.ArgumentParser(description="Execute LLM-based commands from an instruction TOML file.")
@@ -869,13 +458,14 @@ def main():
         sys.exit(1)
 
     try:
-        # Initialize LoggerManager with a temporary log directory for initial steps
-        temp_log_dir = Path("./log_temp")
-        temp_log_dir.mkdir(parents=True, exist_ok=True)
-        temp_logger_manager = LoggerManager(temp_log_dir, debug=args.debug)
+        # Initialize LoggerManager with a log directory based on instruction file name
+        instruction_base_name = instruction_path.stem
+        log_dir = Path(f"./{instruction_base_name}-logs")
+        log_dir.mkdir(parents=True, exist_ok=True)
+        logger_manager = LoggerManager.LoggerManager(log_dir, debug=args.debug)
 
         # Parse and validate instruction file
-        parser_obj = InstructionParser(instruction_path)
+        parser_obj = InstructionParser.InstructionParser(instruction_path)
         data = parser_obj.get_data()
 
         # Process directives
@@ -883,18 +473,15 @@ def main():
         target_directory = Path(data.get("target", {}).get("directory", "output")).resolve()
         copy_source_files(source_paths, target_directory)
 
-        # Reinitialize LoggerManager with actual target directory and debug flag
-        logger_manager = setup_logging(target_directory, debug=args.debug)
-
         # Initialize MacroResolver
         shared_prompts = data.get("shared_prompts", {})
-        macro_resolver = MacroResolver(shared_prompts)
+        macro_resolver = MacroResolver.MacroResolver(shared_prompts)
 
         # Initialize ContextManager
-        context_manager = ContextManager(target_directory)
+        context_manager = ContextManager.ContextManager(target_directory)
 
         # Initialize LLMBot
-        llm_bot = LLMBot()
+        llm_bot = LLMBot.LLMBot()
 
         # Parse command_ids and map to commands
         commands = data.get("commands", [])
@@ -902,7 +489,7 @@ def main():
             raise LLMRunError("No commands found in the instruction file.")
 
         selected_commands = parse_command_ids(args.command_ids, commands)
-
+ 
         if not selected_commands:
             raise LLMRunError("No valid commands selected for execution.")
         

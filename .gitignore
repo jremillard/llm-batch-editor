@@ -1,6 +1,7 @@
 # project specific 
 testdata/EGGS-Turbo-Pascal-1989/*
 output/*
+*-logs
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

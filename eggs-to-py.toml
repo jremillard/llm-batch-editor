@@ -10,8 +10,8 @@ paths = [
 directory = "output/eggs/"
 
 [defaults]
-model = "o1-mini"
-#model = "gpt-4o-mini"
+#model = "o1-mini"
+model = "gpt-4o-mini"
 #model = "claude-3-5-sonnet-latest"
 #model = "claude-3-5-haiku-latest"
 
