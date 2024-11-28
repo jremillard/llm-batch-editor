@@ -21,13 +21,12 @@ from LLMRunError import LLMRunError
 
 
 class CommandExecutor:
-    """Executes commands as per the instruction file."""
+    """Executes a single command as per the instruction file."""
 
-    def __init__(self, instruction_data: Dict[str, Any], instruction_dir: Path, target_dir: Path,
+    def __init__(self, command: Dict[str, Any], instruction_data: Dict[str, Any], instruction_dir: Path, target_dir: Path,
                  logger_manager: LoggerManager, llm_bot: LLMBot, macro_resolver: MacroResolver,
-                 context_manager: ContextManager, selected_commands: List[Dict[str, Any]],
-                 max_workers: int = 5):
-        self.commands = selected_commands
+                 context_manager: ContextManager, max_workers: int = 5):
+        self.command = command
         self.defaults = instruction_data.get("defaults", {})
         self.shared_prompts = instruction_data.get("shared_prompts", {})
         self.instruction_dir = instruction_dir
@@ -38,31 +37,27 @@ class CommandExecutor:
         self.context_manager = context_manager
         self.max_workers = max_workers  # Maximum number of threads for parallel processing
 
-    def execute_all(self):
-        for command in self.commands:
-            cmd_id = command.get("id")
-            cmd_type = command.get("type")
-            logger = self.logger_manager.setup_command_logger(cmd_id)
-            logger.info(f"Starting command '{cmd_id}' of type '{cmd_type}'.")
+    def execute(self):
+        cmd_id = self.command.get("id")
+        cmd_type = self.command.get("type")
+        logger = self.logger_manager.setup_command_logger(cmd_id)
+        logger.info(f"Starting command '{cmd_id}' of type '{cmd_type}'.")
 
-            try:
-                if cmd_type == "llm_create":
-                    self.execute_llm_create(command, logger)
-                elif cmd_type == "llm_edit":
-                    self.execute_llm_edit(command, logger)
-                elif cmd_type == "llm_feedback_edit":
-                    self.execute_llm_feedback_edit(command, logger)
-                else:
-                    raise LLMRunError(f"Unsupported command type '{cmd_type}' in command '{cmd_id}'.")
+        try:
+            if cmd_type == "llm_create":
+                self.execute_llm_create(self.command, logger)
+            elif cmd_type == "llm_edit":
+                self.execute_llm_edit(self.command, logger)
+            elif cmd_type == "llm_feedback_edit":
+                self.execute_llm_feedback_edit(self.command, logger)
+            else:
+                raise LLMRunError(f"Unsupported command type '{cmd_type}' in command '{cmd_id}'.")
 
-                logger.info(f"Command '{cmd_id}' completed successfully.")
-                print(f"Command '{cmd_id}': OK")
-            except Exception as e:
-                logger.error(f"Command '{cmd_id}' failed with error: {e}\n{traceback.format_exc()}")
-                print(f"Command '{cmd_id}': ERROR")
-                # Depending on specification, decide whether to continue or halt
-                # Here, continue to next command
-                continue
+            logger.info(f"Command '{cmd_id}' completed successfully.")
+            print(f"Command '{cmd_id}': OK")
+        except Exception as e:
+            logger.error(f"Command '{cmd_id}' failed with error: {e}\n{traceback.format_exc()}")
+            print(f"Command '{cmd_id}': ERROR")
 
     def execute_llm_create(self, command: Dict[str, Any], logger: logging.Logger):
         target_files = command.get("target_files", [])
@@ -492,18 +487,19 @@ def main():
             raise LLMRunError("No valid commands selected for execution.")
         
         # Initialize and execute selected commands
-        command_executor = CommandExecutor(
-            instruction_data=data,
-            instruction_dir=instruction_path.parent,
-            target_dir=target_directory,
-            logger_manager=logger_manager,
-            llm_bot=llm_bot,
-            macro_resolver=macro_resolver,
-            context_manager=context_manager,
-            selected_commands=selected_commands,
-            max_workers=10  # Adjust based on your system and OpenAI rate limits
-        )
-        command_executor.execute_all()
+        for command in selected_commands:
+            command_executor = CommandExecutor(
+                command=command,
+                instruction_data=data,
+                instruction_dir=instruction_path.parent,
+                target_dir=target_directory,
+                logger_manager=logger_manager,
+                llm_bot=llm_bot,
+                macro_resolver=macro_resolver,
+                context_manager=context_manager,
+                max_workers=10  # Adjust based on your system and OpenAI rate limits
+            )
+            command_executor.execute()
 
     except LLMRunError as e:
         print(f"Error: {e}")

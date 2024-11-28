@@ -8,17 +8,20 @@ from anthropic import Anthropic
 
 from LLMRunError import LLMRunError
 
+
 class LLMBot:
     """Interfaces with the LLM API."""
+
+    openai_models = {"o1-mini", "o1-preview", "gpt-4o", "gpt-4o-mini"}
+    anthropic_models = {"claude-3-5-sonnet-latest", "claude-3-5-haiku-latest"}
+
+    # List of LLM models that do not support the 'role' key in messages, and should not include it in the prompt
+    # only OpenAI reasining models.
+    models_without_role_key = {"o1-mini", "o1-preview"}
 
     def __init__(self, max_retries: int = 3, retry_delay: int = 5):
         self.max_retries = max_retries
         self.retry_delay = retry_delay
-
-        # List of LLM models that do not support the 'role' key in messages
-        self.models_without_role_key = {"o1-mini", "o1-preview"}
-        self.openai_models = {"o1-mini", "o1-preview", "gpt-4o", "gpt-4o-mini"}
-        self.anthropic_models = {"claude-3-5-sonnet-latest", "claude-3-5-haiku-latest"}
 
         # Initialize clients as None for lazy instantiation
         self.clientOpenAI = None
@@ -54,9 +57,9 @@ class LLMBot:
                 logging.debug(f"Sending prompt to LLM (Attempt {attempt}): {prompt[-1].get('content', '')[:50]}...")
 
                 content = ""
-                if model in self.openai_models:
+                if model in LLMBot.openai_models:
                     content = self.get_response_openAI(prompt, model)
-                elif model in self.anthropic_models:
+                elif model in LLMBot.anthropic_models:
                     content = self.get_response_antropic(prompt, model)
                 else:
                     raise ValueError(f"Unsupported model: {model}")
@@ -64,7 +67,7 @@ class LLMBot:
                 logging.debug(f"Received response from LLM: {content[:50]}...")
 
                 # Overwrite the last item as the assistant response
-                if model not in self.models_without_role_key:
+                if model not in LLMBot.models_without_role_key:
                     prompt[-1] = {"role": "assistant", "content": content}
                 else:
                     prompt[-1] = {"content": content}
@@ -99,7 +102,7 @@ class LLMBot:
             self.clientOpenAI = OpenAI()
         # Ensure the prompt starts with a system message if it is not already present
         if not prompt or prompt[0].get('role') != 'system':
-            if model not in self.models_without_role_key:
+            if model not in LLMBot.models_without_role_key:
                 prompt.insert(0, {"role": "system", "content": "You are expert software engineer from MIT."})
 
         completion = self.clientOpenAI.chat.completions.create(
