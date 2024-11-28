@@ -7,6 +7,8 @@ import traceback
 
 from llmbatcheditor.LLMRunError import LLMRunError
 from llmbatcheditor.LLMEndPoint import LLMEndPoint
+from llmbatcheditor.LLMEndPointCached import LLMEndPointCached
+
 from llmbatcheditor.InstructionParser import InstructionParser
 from llmbatcheditor.LoggerManager import LoggerManager
 from llmbatcheditor.ContextManager import ContextManager
@@ -121,7 +123,8 @@ def main():
 
     try:
         # Initialize LoggerManager with a log directory based on instruction file name
-        log_dir = Path(f"./.{Path(__file__).stem}/{instruction_path.stem}/logs")
+        output_dir = Path(f"./.{Path(__file__).stem}/{instruction_path.stem}")
+        log_dir = Path(f"{output_dir}/logs")
         log_dir.mkdir(parents=True, exist_ok=True)
         logger_manager = LoggerManager(log_dir, debug=args.debug)
 
@@ -140,7 +143,7 @@ def main():
         context_manager = ContextManager(target_directory)
 
         # Initialize LLM End Point
-        llm_end_point = LLMEndPoint()
+        llm_end_point = LLMEndPointCached(cache_dir=output_dir)
 
         # Parse command_ids and map to commands
         commands = data.get("commands", [])
