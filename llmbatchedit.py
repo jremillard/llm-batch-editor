@@ -12,19 +12,20 @@ import traceback
 import concurrent.futures
 import json
 
-import LLMBot
-import InstructionParser
-import LoggerManager
-import ContextManager
-import MacroResolver
-from LLMRunError import LLMRunError
+
+from llmbatcheditor.LLMRunError import LLMRunError
+from llmbatcheditor.LLMEndPoint import LLMEndPoint
+from llmbatcheditor.InstructionParser import InstructionParser
+from llmbatcheditor.LoggerManager import LoggerManager
+from llmbatcheditor.ContextManager import ContextManager
+from llmbatcheditor.MacroResolver import MacroResolver
 
 
 class CommandExecutor:
     """Executes a single command as per the instruction file."""
 
     def __init__(self, command: Dict[str, Any], instruction_data: Dict[str, Any], instruction_dir: Path, target_dir: Path,
-                 logger_manager: LoggerManager, llm_bot: LLMBot, macro_resolver: MacroResolver,
+                 logger_manager: LoggerManager, llm_end_point: LLMEndPoint, macro_resolver: MacroResolver,
                  context_manager: ContextManager, max_workers: int = 5):
         self.command = command
         self.defaults = instruction_data.get("defaults", {})
@@ -32,7 +33,7 @@ class CommandExecutor:
         self.instruction_dir = instruction_dir
         self.target_dir = target_dir
         self.logger_manager = logger_manager
-        self.llm_bot = llm_bot
+        self.llm_end_point = llm_end_point
         self.macro_resolver = macro_resolver
         self.context_manager = context_manager
         self.max_workers = max_workers  # Maximum number of threads for parallel processing
@@ -99,7 +100,7 @@ class CommandExecutor:
         file_loggers["prompt"].info(full_prompt)
 
         # Get LLM response
-        llm_response = self.llm_bot.get_response([{"role": "user", "content": full_prompt}], model=model)
+        llm_response = self.llm_end_point.get_response([{"role": "user", "content": full_prompt}], model=model)
 
         # Log response
         file_loggers["output"].info(llm_response)
@@ -179,7 +180,7 @@ class CommandExecutor:
         file_loggers["prompt"].info(full_prompt)
 
         # Get LLM response
-        llm_response = self.llm_bot.get_response([{"role": "user", "content": full_prompt}], model=model)
+        llm_response = self.llm_end_point.get_response([{"role": "user", "content": full_prompt}], model=model)
 
         # Log response
         file_loggers["output"].info(llm_response)
@@ -280,7 +281,7 @@ class CommandExecutor:
                 file_loggers["prompt"].info(full_prompt)
 
                 # Get LLM response
-                llm_response = self.llm_bot.get_response([{"role": "user", "content": full_prompt}], model=model)
+                llm_response = self.llm_end_point.get_response([{"role": "user", "content": full_prompt}], model=model)
 
                 # Log response
                 file_loggers["output"].info(llm_response)
@@ -404,41 +405,6 @@ def parse_command_ids(command_ids: List[str], commands: List[Dict[str, Any]]) ->
 
     return selected_commands
 
-def copy_source_files(source_paths: List[str], target_dir: Path):
-    """
-    Copies source files matching the given patterns to the target directory.
-    Only copies if the target directory is created or is empty.
-
-    :param source_paths: List of glob patterns for source files.
-    :param target_dir: Path object representing the target directory.
-    """
-    if not target_dir.exists():
-        target_dir.mkdir(parents=True, exist_ok=True)
-        copy_files(source_paths, target_dir)
-    else:
-        if not any(target_dir.iterdir()):
-            copy_files(source_paths, target_dir)
-        else:
-            logging.info(f"Target directory '{target_dir}' exists and is not empty. Skipping source file copy.")
-
-
-def copy_files(patterns: List[str], target_dir: Path):
-    """
-    Copies files matching the patterns to the target directory.
-
-    :param patterns: List of glob patterns.
-    :param target_dir: Path object representing the target directory.
-    """
-    for pattern in patterns:
-        # Resolve glob patterns relative to the current working directory
-        matched_files = list(Path('.').glob(pattern))
-        for src in matched_files:
-            if src.is_file():
-                dest = target_dir / src.name
-                shutil.copy2(src, dest)
-                logging.debug(f"Copied '{src}' to '{dest}'.")
-
-
 def main():
     # Parse command-line arguments
     parser = argparse.ArgumentParser(description="Execute LLM-based commands from an instruction TOML file.")
@@ -457,10 +423,10 @@ def main():
         instruction_base_name = instruction_path.stem
         log_dir = Path(f"./{instruction_base_name}-logs")
         log_dir.mkdir(parents=True, exist_ok=True)
-        logger_manager = LoggerManager.LoggerManager(log_dir, debug=args.debug)
+        logger_manager = LoggerManager(log_dir, debug=args.debug)
 
         # Parse and validate instruction file
-        parser_obj = InstructionParser.InstructionParser(instruction_path)
+        parser_obj = InstructionParser(instruction_path)
         data = parser_obj.get_data()
 
         # Process directives
@@ -468,13 +434,13 @@ def main():
 
         # Initialize MacroResolver
         shared_prompts = data.get("shared_prompts", {})
-        macro_resolver = MacroResolver.MacroResolver(shared_prompts)
+        macro_resolver = MacroResolver(shared_prompts)
 
         # Initialize ContextManager
-        context_manager = ContextManager.ContextManager(target_directory)
+        context_manager = ContextManager(target_directory)
 
-        # Initialize LLMBot
-        llm_bot = LLMBot.LLMBot()
+        # Initialize LLM End Point
+        llm_end_point = LLMEndPoint()
 
         # Parse command_ids and map to commands
         commands = data.get("commands", [])
@@ -494,7 +460,7 @@ def main():
                 instruction_dir=instruction_path.parent,
                 target_dir=target_directory,
                 logger_manager=logger_manager,
-                llm_bot=llm_bot,
+                llm_end_point=llm_end_point,
                 macro_resolver=macro_resolver,
                 context_manager=context_manager,
                 max_workers=10  # Adjust based on your system and OpenAI rate limits

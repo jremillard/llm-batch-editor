@@ -1,4 +1,4 @@
-# instructions for llmrun.py to convert EGGS 1989 PASCAL program to python 3.
+# instructions for llmbatchedit.py to convert EGGS 1989 PASCAL program to python 3.
 
 [target]
 directory = "output/eggs/"

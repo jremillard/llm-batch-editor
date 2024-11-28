@@ -4,7 +4,7 @@ An AI-powered tool to automate batch creation and editing of text files/source c
 
 ## Purpose
 
-`llmrun.py` is a Python script designed to interpret and execute commands from an instruction file (e.g., `instructions.toml`). It automates code generation, editing, and testing tasks by leveraging Large Language Models (LLMs) and shell commands.
+`llmbatchedit.py` is a Python script designed to interpret and execute commands from an instruction file (e.g., `instructions.toml`). It automates code generation, editing, and testing tasks by leveraging Large Language Models (LLMs) and shell commands.
 
 This project was created to explore the limits of current AI models in fully automating software development.
 
@@ -12,9 +12,9 @@ Licensed under the MIT License.
 
 ## Instructions
 
-The `instructions.toml` file contains a series of LLM commands that `llmrun.py` interprets and executes. These commands can include tasks such as generating new code, editing existing code, running tests, and executing scripts. The program supports context generation, allowing the LLM to maintain state across multiple commands. Modular prompts enable the reuse of common command patterns. Concurrent execution allows multiple commands to be processed simultaneously. 
+The `instructions.toml` file contains a series of LLM commands that `llmbatchedit.py` interprets and executes. These commands can include tasks such as generating new code, editing existing code, running tests, and executing scripts. The program supports context generation, allowing the LLM to maintain state across multiple commands. Modular prompts enable the reuse of common command patterns. Concurrent execution allows multiple commands to be processed simultaneously. 
 
-See `llmrun.md` for full documentation on the `instructions.toml` and `llmrun.py` command line arguments.
+See `llmbatchedit.md` for full documentation on the `instructions.toml` and `llmbatchedit.py` command line arguments.
 
 ## Dependencies
 
@@ -31,4 +31,4 @@ See `llmrun.md` for full documentation on the `instructions.toml` and `llmrun.py
 
 **Usage:**
 ```bash
-python [llmrun.py] instructions.toml command1-ids [command2-ids] ...
+python [llmbatchedit.py] instructions.toml command1-ids [command2-ids] ...

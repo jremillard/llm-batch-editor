@@ -6,10 +6,10 @@ import time
 from openai import OpenAI
 from anthropic import Anthropic
 
-from LLMRunError import LLMRunError
+from llmbatcheditor.LLMRunError import LLMRunError
 
 
-class LLMBot:
+class LLMEndPoint:
     """Interfaces with the LLM API."""
 
     openai_models = {"o1-mini", "o1-preview", "gpt-4o", "gpt-4o-mini"}
@@ -57,9 +57,9 @@ class LLMBot:
                 logging.debug(f"Sending prompt to LLM (Attempt {attempt}): {prompt[-1].get('content', '')[:50]}...")
 
                 content = ""
-                if model in LLMBot.openai_models:
+                if model in LLMEndPoint.openai_models:
                     content = self.get_response_openAI(prompt, model)
-                elif model in LLMBot.anthropic_models:
+                elif model in LLMEndPoint.anthropic_models:
                     content = self.get_response_antropic(prompt, model)
                 else:
                     raise ValueError(f"Unsupported model: {model}")
@@ -67,7 +67,7 @@ class LLMBot:
                 logging.debug(f"Received response from LLM: {content[:50]}...")
 
                 # Overwrite the last item as the assistant response
-                if model not in LLMBot.models_without_role_key:
+                if model not in LLMEndPoint.models_without_role_key:
                     prompt[-1] = {"role": "assistant", "content": content}
                 else:
                     prompt[-1] = {"content": content}
@@ -102,7 +102,7 @@ class LLMBot:
             self.clientOpenAI = OpenAI()
         # Ensure the prompt starts with a system message if it is not already present
         if not prompt or prompt[0].get('role') != 'system':
-            if model not in LLMBot.models_without_role_key:
+            if model not in LLMEndPoint.models_without_role_key:
                 prompt.insert(0, {"role": "system", "content": "You are expert software engineer from MIT."})
 
         completion = self.clientOpenAI.chat.completions.create(

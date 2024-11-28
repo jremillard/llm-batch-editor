@@ -4,7 +4,7 @@ import logging
 from pathlib import Path
 import sys
 
-from LLMRunError import LLMRunError
+from llmbatcheditor.LLMRunError import LLMRunError
 
 
 class LoggerManager:

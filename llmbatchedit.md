@@ -1,8 +1,8 @@
-# `llmrun` Specification 
+# `llmbatchedit` Specification 
 
 ## Purpose
 
-`llmrun.py` is a Python script designed to interpret and execute commands from an instruction file (e.g., `instructions.toml`). It automates code generation, editing, testing, and execution tasks by leveraging Large Language Models (LLMs) and shell commands. This tool streamlines processes such as codebase transformation, documentation generation, automated debugging, and script execution.
+`llmbatchedit.py` is a Python script designed to interpret and execute commands from an instruction file (e.g., `instructions.toml`). It automates code generation, editing, testing, and execution tasks by leveraging Large Language Models (LLMs) and shell commands. This tool streamlines processes such as codebase transformation, documentation generation, automated debugging, and script execution.
 
 ---
 
@@ -10,7 +10,7 @@
 
 **Usage:**
 ```bash
-python llmrun.py instructions.toml command1 [command2] ...
+python llmbatchedit.py instructions.toml command1 [command2] ...
 ```
 
 - **`instructions.toml`**: Path to the TOML instruction file containing directives and commands.
@@ -557,7 +557,7 @@ The OpenAI API will be used to make the requests of the LLM.
 
 ## Validation Rules
 
-To ensure the integrity and correctness of the instruction files and command executions, `llmrun.py` enforces the following validation rules:
+To ensure the integrity and correctness of the instruction files and command executions, `llmbatchedit.py` enforces the following validation rules:
 
 1. **Unique Command IDs:**
    - Each command must have a unique `id`.

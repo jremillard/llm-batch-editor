@@ -3,9 +3,8 @@ from typing import List, Dict, Any
 import logging
 from pathlib import Path
 import toml
-from LLMRunError import LLMRunError
-from LLMBot import LLMBot
-
+from llmbatcheditor.LLMRunError import LLMRunError
+import llmbatcheditor.LLMEndPoint
 
 # Constants for built-in macros
 BUILT_IN_MACROS = {"filename", "output", "filelist", "filename_base"}
@@ -53,7 +52,7 @@ class InstructionParser:
     def validate_commands(self):
         commands = self.data.get("commands", [])
         defaults = self.data.get("defaults", {})
-        supported_models = LLMBot.get_supported_models()
+        supported_models = llmbatcheditor.LLMEndPoint.LLMEndPoint.get_supported_models()
         for index, cmd in enumerate(commands, start=1):
             cmd_id = cmd.get("id", f"<command at position {index}>")
             cmd_type = cmd.get("type")
