@@ -1,6 +1,6 @@
 # project specific 
-output/*
-*-logs
+output/
+.llmbatchedit/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
