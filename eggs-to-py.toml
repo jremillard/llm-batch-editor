@@ -4,12 +4,13 @@
 directory = "output/eggs/"
 
 [defaults]
-model = "o1-mini"
+model = "o1-preview"
+prompt_model="o1-preview"
+
 #model = "gpt-4o-mini"
 #model = "gpt-4o"
 #model = "claude-3-5-sonnet-latest"
 #model = "claude-3-5-haiku-latest"
-prompt_model="gpt-4o"
 
 [shared_prompts]
 # Reusable instruction snippets to promote consistency and reduce redundancy
@@ -86,6 +87,7 @@ The program output should include status information to make debugging easy.
 The strings are encoded as Pascal string.
 Saved pascal strings are not null-terminated. The string length is stored at the start of the string as a unsigned byte.
 The program should have a one function for each CSV file created.
+The strings in the EGG files include quotes, commas, and spaces that needs to be escaped in the CSV.
 """
 context = ["*.pas", "*.egg" ]
 
@@ -98,12 +100,10 @@ Correct any errors in {{filename}}.
 Ensure that all CSV files are correct and complete compared to the EGG files.
 Output the entire file {{filename}} with correction if any problems are found in the CSVs. 
 Otherwise don't respond with any python code.
-----------------------------------------------------------------
-{{output}}
 """
 test_commands = ["del *.csv", "python converteggstocsv.py"]
 max_retries = 4
-context = ["*.csv", "*.egg", "*.pas" ]
+context = ["*.csv", "*.egg","*.pas" ]
 
 [[commands]]
 id = "create_globals"
@@ -183,7 +183,6 @@ type = "llm_feedback_edit"
 target_files = ["globals.py" ]
 instruction = """
 {{pylint}}
-{{output}}
 """
 test_commands = ["pylint --disable=W,C,R {{filename}}"]
 max_retries = 5
@@ -237,7 +236,6 @@ target_files = [
 ]
 instruction = """
 {{pylint}}
-{{output}}
 """
 test_commands = ["pylint --disable=W,C,R {{filename}}"]
 max_retries = 5

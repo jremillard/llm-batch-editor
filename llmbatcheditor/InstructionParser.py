@@ -77,8 +77,6 @@ class InstructionParser:
                 if "max_retries" not in cmd:
                     raise LLMRunError(f"Command '{cmd_id}' of type 'llm_feedback_edit' must include 'max_retries'.")
                 instruction = cmd.get("instruction", "")
-                if "{{output}}" not in instruction:
-                    raise LLMRunError(f"Command '{cmd_id}' of type 'llm_feedback_edit' must include '{{{{output}}}}' in 'instruction'.")
             else:
                 raise LLMRunError(f"Unsupported command type: '{cmd_type}' in command '{cmd_id}'.")
 

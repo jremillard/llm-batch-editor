@@ -18,6 +18,7 @@ class LLMEndPoint:
     # List of LLM models that do not support the 'role' key in messages, and should not include it in the prompt
     # only OpenAI reasining models.
     models_without_role_key = {"o1-mini", "o1-preview"}
+    models_without_temp_key = {"o1-mini", "o1-preview"}
 
     def __init__(self, max_retries: int = 3, retry_delay: int = 5):
         self.max_retries = max_retries
@@ -105,10 +106,17 @@ class LLMEndPoint:
             if model not in LLMEndPoint.models_without_role_key:
                 prompt.insert(0, {"role": "system", "content": "You are expert software engineer from MIT."})
 
-        completion = self.clientOpenAI.chat.completions.create(
-            model=model,
-            messages=prompt
-        )
+        if model in LLMEndPoint.models_without_temp_key:
+            completion = self.clientOpenAI.chat.completions.create(
+                model=model,
+                messages=prompt,
+            )
+        else:
+            completion = self.clientOpenAI.chat.completions.create(
+                model=model,
+                messages=prompt,
+                temperature=0.1
+            )
 
         content = completion.choices[0].message.content
 

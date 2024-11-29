@@ -75,10 +75,17 @@ class CommandExecutor:
         Returns:
             str: The response from the LLM endpoint after processing the formatted instruction.
         """
-        preedit_prompt = "Format the instructions in MD. " + \
-            "Make each requirement an item in a list. "+ \
-            "Rewrite the requirements to be clear. " + \
-            "Don't add new major requirements. "
+        preedit_prompt = """
+These are instructions to a software engineer. 
+Convert them to standard form, which is the high-level instructions, then followed by check list. 
+Don't duplicate information in the instructions and check list. 
+Perfer to put details in the check list. 
+Write the instructions so they are short and professional. 
+Ensure that all relevant information is captured accurately in the checklist to avoid missing any critical details.
+Don't add any checklist items for CI's, READMEs, performance, or unit tests unless included in the orginal instructions..
+----------------------------------
+
+"""
             
         full_prompt = f"{preedit_prompt}\n\n{instruction}"
         
@@ -142,7 +149,6 @@ class LLMCreateExecutor(CommandExecutor):
         placeholders = {
             "filename": file_name,
             "filename_base": os.path.splitext(file_name)[0],
-            "output": "",
             "filelist": self.context_manager.generate_filelist()
         }
         preedited_instruction = self.preedit_instruction(instruction, model=prompt_model)
@@ -238,7 +244,6 @@ class LLMEditExecutor(CommandExecutor):
         placeholders = {
             "filename": file_name,
             "filename_base": os.path.splitext(file_name)[0],
-            "output": "",
             "filelist": self.context_manager.generate_filelist()
         }
         preedited_instruction = self.preedit_instruction(instruction, model=prompt_model)
@@ -357,7 +362,6 @@ class LLMFeedbackEditExecutor(CommandExecutor):
                 placeholders = {
                     "filename": file_name,
                     "filename_base": os.path.splitext(file_name)[0],
-                    "output": combined_output,
                     "filelist": self.context_manager.generate_filelist()
                 }
                 preedited_instruction = self.preedit_instruction(instruction, prompt_model)
@@ -372,6 +376,11 @@ class LLMFeedbackEditExecutor(CommandExecutor):
                     break
 
                 context_items = []
+
+                context_items.append('-'*80) 
+                context_items.append(f"Output:")
+                context_items.append('-'*80) 
+                context_items.append(combined_output)
                 context_items.append('-'*80) 
                 context_items.append(f"File: {file_name}")
                 context_items.append('-'*80) 

@@ -114,7 +114,7 @@ context = ["*.json", "*.md"]
 
 - **`instruction`**
   - **Type:** Multiline String with Macros
-  - **Description:** Instructions to be provided to the LLM. May contain placeholders like `{{filename}}`, `{{output}}`, and macros like `{{macro_name}}` which will be replaced with shared prompt snippets.
+  - **Description:** Instructions to be provided to the LLM. May contain placeholders like `{{filename}}` and macros like `{{macro_name}}` which will be replaced with shared prompt snippets.
   - **Example:**
     ```toml
     instruction = """
@@ -258,7 +258,7 @@ model = "<model_name>" # Optional: Uses defaults.model if omitted
 test_commands = ["<test_command1>", "<test_command2>", ...]
 max_retries = <number>
 instruction = """
-<instruction_body with mandatory {{output}} and optional macros>
+<instruction_body optional macros>
 """
 context = ["<context_item1>", "<context_item2>", ...] # Optional
 ```
@@ -284,15 +284,13 @@ context = ["<context_item1>", "<context_item2>", ...] # Optional
   - **Example:** `3`
 
 - **`instruction`**
-  - **Type:** Multiline String with Mandatory `{{output}}` and Optional Macros
-  - **Description:** Instructions provided to the LLM to guide the error correction process. Must contain the `{{output}}` placeholder, which will be replaced with the combined output from the test commands. May also shared prompts  `{{macro_name}}`.
+  - **Type:** Multiline String with optional Macros
+  - **Description:** Instructions provided to the LLM to guide the error correction process. May also shared prompts  `{{macro_name}}`.
   - **Example:**
     ```toml
     instruction = """
-    The script {{filename}} failed to execute with the following output:
-    {{output}}
-    {{error_handling}}
     Please fix any errors in {{filename}} to make it run successfully.
+    {{error_handling}}
     """
     ```
 
