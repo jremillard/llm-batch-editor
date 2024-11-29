@@ -39,6 +39,7 @@ Directives target directory for the commands.
 ```toml
 
 [target]
+
 directory = "output"
 ```
 - **`target.directory`**
@@ -55,15 +56,23 @@ directory = "output"
 
 ```toml
 [defaults]
-model = "gpt-4"
+model = "gpt-4o"
 ```
 
 - **`defaults.model`**
   - **Type:** String
-  - **Description:** Specifies the default LLM to use for commands that do not explicitly define a `model`.
+  - **Description:** Specifies the default LLM to use for commands that do not explicitly define a `model`. This setting ensures that all commands have a consistent LLM unless overridden individually.
   - **Example:**
     ```toml
-    defaults.model = "gpt-4"
+    defaults.model = "gpt-4o"
+    ```
+
+- **`defaults.prompt_model`**
+  - **Type:** String
+  - **Description:** Specifies the default LLM to use for pre-editing instructions before they are resolved and sent to the main `model`. 
+  - **Example:**
+    ```toml
+    defaults.prompt_model = "gpt-4o"
     ```
 
 ### 4. Commands
@@ -100,8 +109,8 @@ context = ["*.json", "*.md"]
 
 - **`model`** *(Optional)*
   - **Type:** String
-  - **Description:** Specifies the LLM to use (e.g., `"gpt-4"`). If omitted, the `defaults.model` value is used.
-  - **Example:** `"gpt-4"`
+  - **Description:** Specifies the LLM to use (e.g., `"gpt-4o"`). If omitted, the `defaults.model` value is used.
+  - **Example:** `"gpt-4o"`
 
 - **`instruction`**
   - **Type:** Multiline String with Macros
@@ -142,7 +151,7 @@ context = ["<context_item1>", "<context_item2>", ...]
 - **`model`** *(Optional)*
   - **Type:** String
   - **Description:** Specifies the LLM to use.
-  - **Example:** `"gpt-4"`
+  - **Example:** `"gpt-4o"`
 
 - **`instruction`**
   - **Type:** Multiline String with Macros
@@ -200,7 +209,12 @@ context = ["<context_item1>", "<context_item2>", ...] # Optional
 - **`model`** *(Optional)*
   - **Type:** String
   - **Description:** Specifies the LLM to use.
-  - **Example:** `"gpt-4"`
+  - **Example:** `"gpt-4o"`
+
+- **`model_prompt`** *(Optional)*
+  - **Type:** String
+  - **Description:** Specifies the LLM to use to rewrite prompts.
+  - **Example:** `"gpt-4o"`
 
 - **`instruction`**
   - **Type:** Multiline String with Macros
@@ -257,7 +271,7 @@ context = ["<context_item1>", "<context_item2>", ...] # Optional
 - **`model`** *(Optional)*
   - **Type:** String
   - **Description:** Specifies the LLM to use.
-  - **Example:** `"gpt-4"`
+  - **Example:** `"gpt-4o"`
 
 - **`test_commands`**
   - **Type:** Array of strings
@@ -624,7 +638,7 @@ To ensure the integrity and correctness of the instruction files and command exe
 directory = "output"
 
 [defaults]
-model = "gpt-4"
+model = "gpt-4o"
 
 [shared_prompts]
 error_handling = "Ensure proper error handling is implemented."
@@ -674,7 +688,7 @@ context = ["*.py", "*.md"]
 directory = "test"
 
 [defaults]
-model = "gpt-4"
+model = "gpt-4o"
 
 [shared_prompts]
 create_unit_tests = "For each Python module in the source directory, create a unit test file named {{filename}} using Python's built-in `unittest` framework."
@@ -746,7 +760,7 @@ directory = "csharp"
 merge = true
 
 [defaults]
-model = "gpt-4"
+model = "gpt-4o"
 
 [shared_prompts]
 convert_cpp_to_cs = "Convert the Managed C++ files to equivalent C# files. Ensure that the functionality and logical structure are preserved."

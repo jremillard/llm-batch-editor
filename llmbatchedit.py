@@ -157,7 +157,7 @@ def main():
         
         # Initialize and execute selected commands
         for command in selected_commands:
-            command_executor = CommandExecutor(
+            command_executor = CommandExecutor.create_executor(
                 command=command,
                 instruction_data=data,
                 instruction_dir=instruction_path.parent,

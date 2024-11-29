@@ -12,7 +12,7 @@ from llmbatcheditor.LLMRunError import LLMRunError
 class LLMEndPoint:
     """Interfaces with the LLM API."""
 
-    openai_models = {"o1-mini", "o1-preview", "gpt-4o", "gpt-4o-mini"}
+    openai_models = {"o1-mini", "o1-preview", "gpt-4o", "gpt-4o-mini","gpt-4","gpt-4-turbo"}
     anthropic_models = {"claude-3-5-sonnet-latest", "claude-3-5-haiku-latest"}
 
     # List of LLM models that do not support the 'role' key in messages, and should not include it in the prompt

@@ -15,7 +15,23 @@ from llmbatcheditor.ContextManager import ContextManager
 from llmbatcheditor.MacroResolver import MacroResolver
 
 class CommandExecutor:
-    """Executes a single command as per the instruction file."""
+    """
+    Base class for executing commands. Provides common functionality for different types of command executors.
+    """
+    
+    @staticmethod
+    def create_executor(command: Dict[str, Any], instruction_data: Dict[str, Any], instruction_dir: Path, target_dir: Path,
+                        logger_manager: LoggerManager, llm_end_point: LLMEndPoint, macro_resolver: MacroResolver,
+                        context_manager: ContextManager, max_workers: int = 5):
+        cmd_type = command.get("type")
+        if cmd_type == "llm_create":
+            return LLMCreateExecutor(command, instruction_data, instruction_dir, target_dir, logger_manager, llm_end_point, macro_resolver, context_manager, max_workers)
+        elif cmd_type == "llm_edit":
+            return LLMEditExecutor(command, instruction_data, instruction_dir, target_dir, logger_manager, llm_end_point, macro_resolver, context_manager, max_workers)
+        elif cmd_type == "llm_feedback_edit":
+            return LLMFeedbackEditExecutor(command, instruction_data, instruction_dir, target_dir, logger_manager, llm_end_point, macro_resolver, context_manager, max_workers)
+        else:
+            raise LLMRunError(f"Unsupported command type '{cmd_type}' in command '{command.get('id')}'.")
 
     def __init__(self, command: Dict[str, Any], instruction_data: Dict[str, Any], instruction_dir: Path, target_dir: Path,
                  logger_manager: LoggerManager, llm_end_point: LLMEndPoint, macro_resolver: MacroResolver,
@@ -31,22 +47,63 @@ class CommandExecutor:
         self.context_manager = context_manager
         self.max_workers = max_workers  # Maximum number of threads for parallel processing
 
+    def extract_content_to_write(self, file_name: str, llm_response: str) -> str:
+        content_to_write = None
+        if file_name.endswith('.md'):
+            # If the file is a markdown file, assume the LLM response is the file content
+            content_to_write = llm_response.strip()
+        else:
+            # For other file types, use regex to extract the longest code block
+            code_blocks = re.findall(r"```[a-zA-Z0-9\+]*\n(.*?)```", llm_response, re.DOTALL)
+            if code_blocks:
+                content_to_write = max(code_blocks, key=len).strip()
+        return content_to_write
+
+    def preedit_instruction(self, instruction: str, model: str) -> str:
+        """
+        Pre-edits the given instruction to format it as a Markdown list.
+        This method takes an instruction string and a model identifier, formats the instruction
+        as a Markdown list, and sends it to the LLM endpoint to get a response. The response is
+        then stripped of any leading or trailing whitespace and returned.
+        Editing an LLM prompt before sending it to the model can improve the clarity and structure
+        of the instructions, leading to more accurate and relevant responses from the model. By
+        formatting the instructions as a Markdown list, the prompt becomes more organized and easier
+        for the model to interpret.
+        Args:
+            instruction (str): The instruction string to be pre-edited.
+            model (str): The identifier of the model to be used for generating the response.
+        Returns:
+            str: The response from the LLM endpoint after processing the formatted instruction.
+        """
+        preedit_prompt = "Format the instructions in MD. " + \
+            "Make each requirement an item in a list. "+ \
+            "Rewrite the requirements to be clear. " + \
+            "Don't add new major requirements. "
+            
+        full_prompt = f"{preedit_prompt}\n\n{instruction}"
+        
+        # Get LLM response
+        llm_response = self.llm_end_point.get_response([{"role": "user", "content": full_prompt}], model=model)
+        
+        return llm_response.strip()
+
+
+class LLMCreateExecutor(CommandExecutor):
+    """
+    Executor for handling 'llm_create' commands. Creates new files based on LLM responses.
+    """
+    def __init__(self, command: Dict[str, Any], instruction_data: Dict[str, Any], instruction_dir: Path, target_dir: Path,
+                 logger_manager: LoggerManager, llm_end_point: LLMEndPoint, macro_resolver: MacroResolver,
+                 context_manager: ContextManager, max_workers: int = 5):
+        super().__init__(command, instruction_data, instruction_dir, target_dir, logger_manager, llm_end_point, macro_resolver, context_manager, max_workers)
+
     def execute(self):
         cmd_id = self.command.get("id")
-        cmd_type = self.command.get("type")
         logger = self.logger_manager.setup_command_logger(cmd_id)
-        logger.info(f"Starting command '{cmd_id}' of type '{cmd_type}'.")
+        logger.info(f"Starting command '{cmd_id}' of type 'llm_create'.")
 
         try:
-            if cmd_type == "llm_create":
-                self.execute_llm_create(self.command, logger)
-            elif cmd_type == "llm_edit":
-                self.execute_llm_edit(self.command, logger)
-            elif cmd_type == "llm_feedback_edit":
-                self.execute_llm_feedback_edit(self.command, logger)
-            else:
-                raise LLMRunError(f"Unsupported command type '{cmd_type}' in command '{cmd_id}'.")
-
+            self.execute_llm_create(self.command, logger)
             logger.info(f"Command '{cmd_id}' completed successfully.")
             print(f"Command '{cmd_id}': OK")
         except Exception as e:
@@ -57,12 +114,13 @@ class CommandExecutor:
         target_files = command.get("target_files", [])
         instruction = command.get("instruction", "")
         context_patterns = command.get("context", [])
-        model = command.get("model", self.defaults.get("model", "gpt-4"))
+        model = command.get("model", self.defaults.get("model", "gpt-4o"))
+        prompt_model = command.get("prompt_model", self.defaults.get("prompt_model", "gpt-4o"))
 
         # Use ThreadPoolExecutor for parallel processing
         with concurrent.futures.ThreadPoolExecutor(max_workers=self.max_workers) as executor:
             future_to_file = {
-                executor.submit(self.process_create_file, file_name, instruction, context_patterns, model, logger): file_name
+                executor.submit(self.process_create_file, file_name, instruction, context_patterns, model, prompt_model, logger): file_name
                 for file_name in target_files
             }
             for future in concurrent.futures.as_completed(future_to_file):
@@ -73,7 +131,13 @@ class CommandExecutor:
                 except Exception as e:
                     logger.error(f"Error creating file '{file_name}': {e}")
 
-    def process_create_file(self, file_name: str, instruction: str, context_patterns: List[str], model: str, logger: logging.Logger):
+    def process_create_file(self, 
+            file_name: str, 
+            instruction: str, 
+            context_patterns: List[str], 
+            model: str, 
+            prompt_model: str, 
+            logger: logging.Logger):
         logger.info(f"Creating file '{file_name}'.")
         placeholders = {
             "filename": file_name,
@@ -81,7 +145,8 @@ class CommandExecutor:
             "output": "",
             "filelist": self.context_manager.generate_filelist()
         }
-        resolved_instruction = self.macro_resolver.resolve(instruction, placeholders)
+        preedited_instruction = self.preedit_instruction(instruction, model=prompt_model)
+        resolved_instruction = self.macro_resolver.resolve(preedited_instruction, placeholders)
 
         # Gather context
         context_items = self.context_manager.gather_context(context_patterns)
@@ -99,31 +164,46 @@ class CommandExecutor:
         file_loggers["output"].info(llm_response)
 
         # Process LLM output
-        content_to_write = None
-        if file_name.endswith('.md'):
-            # If the file is a markdown file, assume the LLM response is the file content
-            content_to_write = llm_response.strip()
-        else:
-            # For other file types, use regex to extract the longest code block
-            code_blocks = re.findall(r"```[a-zA-Z0-9\+]*\n(.*?)```", llm_response, re.DOTALL)
-            if code_blocks:
-                content_to_write = max(code_blocks, key=len).strip()
+        content_to_write = self.extract_content_to_write(file_name, llm_response)
  
         # Write to target file
         target_file_path = self.target_dir / file_name
         with open(target_file_path, 'w', encoding='utf-8') as f:
             f.write(content_to_write)
 
+class LLMEditExecutor(CommandExecutor):
+    """
+    Executor for handling 'llm_edit' commands. Edits existing files based on LLM responses.
+    """
+    def __init__(self, command: Dict[str, Any], instruction_data: Dict[str, Any], instruction_dir: Path, target_dir: Path,
+                 logger_manager: LoggerManager, llm_end_point: LLMEndPoint, macro_resolver: MacroResolver,
+                 context_manager: ContextManager, max_workers: int = 5):
+        super().__init__(command, instruction_data, instruction_dir, target_dir, logger_manager, llm_end_point, macro_resolver, context_manager, max_workers)
+
+    def execute(self):
+        cmd_id = self.command.get("id")
+        logger = self.logger_manager.setup_command_logger(cmd_id)
+        logger.info(f"Starting command '{cmd_id}' of type 'llm_edit'.")
+
+        try:
+            self.execute_llm_edit(self.command, logger)
+            logger.info(f"Command '{cmd_id}' completed successfully.")
+            print(f"Command '{cmd_id}': OK")
+        except Exception as e:
+            logger.error(f"Command '{cmd_id}' failed with error: {e}\n{traceback.format_exc()}")
+            print(f"Command '{cmd_id}': ERROR")
+
     def execute_llm_edit(self, command: Dict[str, Any], logger: logging.Logger):
         target_files = command.get("target_files", [])
         instruction = command.get("instruction", "")
         context_patterns = command.get("context", [])
         model = command.get("model", self.defaults.get("model", "gpt-4"))
+        prompt_model = command.get("prompt_model", self.defaults.get("prompt_model", "gpt-4o"))
 
         # Use ThreadPoolExecutor for parallel processing
         with concurrent.futures.ThreadPoolExecutor(max_workers=self.max_workers) as executor:
             future_to_file = {
-                executor.submit(self.process_edit_file, file_name, instruction, context_patterns, model, logger): file_name
+                executor.submit(self.process_edit_file, file_name, instruction, context_patterns, model, prompt_model, logger): file_name
                 for file_name in target_files
             }
             for future in concurrent.futures.as_completed(future_to_file):
@@ -134,7 +214,13 @@ class CommandExecutor:
                 except Exception as e:
                     logger.error(f"Error editing file '{file_name}': {e}")
 
-    def process_edit_file(self, file_name: str, instruction: str, context_patterns: List[str], model: str, logger: logging.Logger):
+    def process_edit_file(self, 
+            file_name: str, 
+            instruction: str, 
+            context_patterns: List[str], 
+            model: str, 
+            prompt_model: str, 
+            logger: logging.Logger):
         logger.info(f"Editing file '{file_name}'.")
         target_file_path = self.target_dir / file_name
         if not target_file_path.exists():
@@ -155,7 +241,8 @@ class CommandExecutor:
             "output": "",
             "filelist": self.context_manager.generate_filelist()
         }
-        resolved_instruction = self.macro_resolver.resolve(instruction, placeholders)
+        preedited_instruction = self.preedit_instruction(instruction, model=prompt_model)
+        resolved_instruction = self.macro_resolver.resolve(preedited_instruction, placeholders)
 
         # Gather context, including the current file content
         context_items = []
@@ -178,19 +265,33 @@ class CommandExecutor:
         # Log response
         file_loggers["output"].info(llm_response)
 
-        content_to_write = None
-        if file_name.endswith('.md'):
-            # If the file is a markdown file, assume the LLM response is the file content
-            content_to_write = llm_response.strip()
-        else:
-            # For other file types, use regex to extract the longest code block
-            code_blocks = re.findall(r"```[a-zA-Z0-9\+]*\n(.*?)```", llm_response, re.DOTALL)
-            if code_blocks:
-                content_to_write = max(code_blocks, key=len).strip()
+        content_to_write = self.extract_content_to_write(file_name, llm_response)
  
         # Write updated content to the file
         with open(target_file_path, 'w', encoding='utf-8') as f:
             f.write(content_to_write)
+
+class LLMFeedbackEditExecutor(CommandExecutor):
+    """
+    Executor for handling 'llm_feedback_edit' commands. Edits files based on feedback from test commands and LLM responses.
+    """
+    def __init__(self, command: Dict[str, Any], instruction_data: Dict[str, Any], instruction_dir: Path, target_dir: Path,
+                 logger_manager: LoggerManager, llm_end_point: LLMEndPoint, macro_resolver: MacroResolver,
+                 context_manager: ContextManager, max_workers: int = 5):
+        super().__init__(command, instruction_data, instruction_dir, target_dir, logger_manager, llm_end_point, macro_resolver, context_manager, max_workers)
+
+    def execute(self):
+        cmd_id = self.command.get("id")
+        logger = self.logger_manager.setup_command_logger(cmd_id)
+        logger.info(f"Starting command '{cmd_id}' of type 'llm_feedback_edit'.")
+
+        try:
+            self.execute_llm_feedback_edit(self.command, logger)
+            logger.info(f"Command '{cmd_id}' completed successfully.")
+            print(f"Command '{cmd_id}': OK")
+        except Exception as e:
+            logger.error(f"Command '{cmd_id}' failed with error: {e}\n{traceback.format_exc()}")
+            print(f"Command '{cmd_id}': ERROR")
 
     def execute_llm_feedback_edit(self, command: Dict[str, Any], logger: logging.Logger):
         target_files = command.get("target_files", [])
@@ -199,11 +300,12 @@ class CommandExecutor:
         max_retries = command.get("max_retries", 3)
         context_patterns = command.get("context", [])
         model = command.get("model", self.defaults.get("model", "gpt-4"))
+        prompt_model = command.get("prompt_model", self.defaults.get("prompt_model", "gpt-4o"))
 
         # Use ThreadPoolExecutor for parallel processing
         with concurrent.futures.ThreadPoolExecutor(max_workers=self.max_workers) as executor:
             future_to_file = {
-                executor.submit(self.process_feedback_edit_file, file_name, instruction, test_commands, max_retries, context_patterns, model, logger): file_name
+                executor.submit(self.process_feedback_edit_file, file_name, instruction, test_commands, max_retries, context_patterns, model, prompt_model, logger): file_name
                 for file_name in target_files
             }
             for future in concurrent.futures.as_completed(future_to_file):
@@ -214,8 +316,16 @@ class CommandExecutor:
                 except Exception as e:
                     logger.error(f"Feedback-editing failed for '{file_name}': {e}")
 
-    def process_feedback_edit_file(self, file_name: str, instruction: str, test_commands: List[str], max_retries: int,
-                                   context_patterns: List[str], model: str, logger: logging.Logger):
+    def process_feedback_edit_file(
+            self, 
+            file_name: str, 
+            instruction: str, 
+            test_commands: List[str], 
+            max_retries: int,
+            context_patterns: List[str], 
+            model: str, 
+            prompt_model: str,
+            logger: logging.Logger):
         logger.info(f"Feedback-editing file '{file_name}'.")
         target_file_path = self.target_dir / file_name
         if not target_file_path.exists():
@@ -250,7 +360,8 @@ class CommandExecutor:
                     "output": combined_output,
                     "filelist": self.context_manager.generate_filelist()
                 }
-                resolved_instruction = self.macro_resolver.resolve(instruction, placeholders)
+                preedited_instruction = self.preedit_instruction(instruction, prompt_model)
+                resolved_instruction = self.macro_resolver.resolve(preedited_instruction, placeholders)
 
                 # Gather context, including the current file content
                 try:
@@ -279,15 +390,7 @@ class CommandExecutor:
                 # Log response
                 file_loggers["output"].info(llm_response)
 
-                content_to_write = None
-                if file_name.endswith('.md'):
-                    # If the file is a markdown file, assume the LLM response is the file content
-                    content_to_write = llm_response.strip()
-                else:
-                    # For other file types, use regex to extract the longest code block
-                    code_blocks = re.findall(r"```[a-zA-Z0-9\+]*\n(.*?)```", llm_response, re.DOTALL)
-                    if code_blocks:
-                        content_to_write = max(code_blocks, key=len).strip()
+                content_to_write = self.extract_content_to_write(file_name, llm_response)
         
                 # Write updated content to the file
                 if ( content_to_write is not None):
