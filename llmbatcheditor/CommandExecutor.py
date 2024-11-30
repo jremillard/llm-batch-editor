@@ -6,6 +6,7 @@ import subprocess
 import re
 import traceback
 import concurrent.futures
+import threading
 
 from llmbatcheditor.LLMRunError import LLMRunError
 from llmbatcheditor.LLMEndPoint import LLMEndPoint
@@ -18,6 +19,7 @@ class CommandExecutor:
     """
     Base class for executing commands. Provides common functionality for different types of command executors.
     """
+    _preedit_lock = threading.Lock()
     
     @staticmethod
     def create_executor(command: Dict[str, Any], instruction_data: Dict[str, Any], instruction_dir: Path, target_dir: Path,
@@ -60,8 +62,7 @@ class CommandExecutor:
         return content_to_write
 
     def preedit_instruction(self, instruction: str, model: str) -> str:
-        """
-        Pre-edits the given instruction to format it as a Markdown list.
+        """Pre-edits the given instruction to format it as a Markdown list.
         This method takes an instruction string and a model identifier, formats the instruction
         as a Markdown list, and sends it to the LLM endpoint to get a response. The response is
         then stripped of any leading or trailing whitespace and returned.
@@ -70,30 +71,30 @@ class CommandExecutor:
         formatting the instructions as a Markdown list, the prompt becomes more organized and easier
         for the model to interpret.
         Args:
-            instruction (str): The instruction string to be pre-edited.
-            model (str): The identifier of the model to be used for generating the response.
+        instruction (str): The instruction string to be pre-edited.
+        model (str): The identifier of the model to be used for generating the response.
         Returns:
-            str: The response from the LLM endpoint after processing the formatted instruction.
+        str: The response from the LLM endpoint after processing the formatted instruction.
         """
-        preedit_prompt = """
-These are instructions to a software engineer. 
-Convert them to standard form, which is the high-level instructions, then followed by check list. 
+
+        with self._preedit_lock:
+            preedit_prompt = """These are instructions to a software engineer. 
+Convert them to a standard form which is: first the high-level instructions, then followed by check list. 
 Don't duplicate information in the instructions and check list. 
 Perfer to put details in the check list. 
 Write the instructions so they are short and professional. 
 Ensure that all relevant information is captured accurately in the checklist to avoid missing any critical details.
-Don't add any checklist items for CI's, READMEs, performance, or unit tests unless included in the orginal instructions..
+Don't add any checklist items for CI's, READMEs, best practices, performance, or unit tests unless included in the orginal instructions..
 ----------------------------------
 
 """
             
-        full_prompt = f"{preedit_prompt}\n\n{instruction}"
-        
-        # Get LLM response
-        llm_response = self.llm_end_point.get_response([{"role": "user", "content": full_prompt}], model=model)
-        
-        return llm_response.strip()
-
+            full_prompt = f"{preedit_prompt}\n\n{instruction}"
+            
+            # Get LLM response
+            llm_response = self.llm_end_point.get_response([{"role": "user", "content": full_prompt}], model=model)
+            
+            return llm_response.strip()
 
 class LLMCreateExecutor(CommandExecutor):
     """
@@ -297,6 +298,7 @@ class LLMFeedbackEditExecutor(CommandExecutor):
         except Exception as e:
             logger.error(f"Command '{cmd_id}' failed with error: {e}\n{traceback.format_exc()}")
             print(f"Command '{cmd_id}': ERROR")
+            raise
 
     def execute_llm_feedback_edit(self, command: Dict[str, Any], logger: logging.Logger):
         target_files = command.get("target_files", [])
@@ -315,11 +317,8 @@ class LLMFeedbackEditExecutor(CommandExecutor):
             }
             for future in concurrent.futures.as_completed(future_to_file):
                 file_name = future_to_file[future]
-                try:
-                    future.result()
-                    logger.info(f"Feedback-editing completed successfully for '{file_name}'.")
-                except Exception as e:
-                    logger.error(f"Feedback-editing failed for '{file_name}': {e}")
+                future.result()
+                logger.info(f"Feedback-editing completed successfully for '{file_name}'.")
 
     def process_feedback_edit_file(
             self, 
@@ -340,6 +339,12 @@ class LLMFeedbackEditExecutor(CommandExecutor):
         retry_count = 0
         success = False
 
+        # clean out any old lots file for this command+file.
+        self.logger_manager.delete_command_logs(logger.name,file_name)
+        
+        context_files = []
+        prompt = []
+        
         while retry_count < max_retries and not success:
             try:
                 # Run test commands
@@ -367,6 +372,19 @@ class LLMFeedbackEditExecutor(CommandExecutor):
                 preedited_instruction = self.preedit_instruction(instruction, prompt_model)
                 resolved_instruction = self.macro_resolver.resolve(preedited_instruction, placeholders)
 
+                context_items = []
+
+                # command(s) output
+                context_items.append('-'*80) 
+                context_items.append(f"Output:")
+                context_items.append('-'*80) 
+                context_items.append(combined_output)
+
+                # the file being edited.
+                context_items.append('-'*80) 
+                context_items.append(f"File: {file_name} Revision: {retry_count}")
+                context_items.append('-'*80) 
+
                 # Gather context, including the current file content
                 try:
                     with open(target_file_path, 'r', encoding='utf-8') as f:
@@ -375,28 +393,42 @@ class LLMFeedbackEditExecutor(CommandExecutor):
                     logger.error(f"Failed to read file '{file_name}' during feedback-edit: {e}")
                     break
 
-                context_items = []
-
-                context_items.append('-'*80) 
-                context_items.append(f"Output:")
-                context_items.append('-'*80) 
-                context_items.append(combined_output)
-                context_items.append('-'*80) 
-                context_items.append(f"File: {file_name}")
-                context_items.append('-'*80) 
                 context_items.append(current_content)
-                context_items.extend( self.context_manager.gather_context(context_patterns))
+
+                context_files_cycle = self.context_manager.load_file_data(context_patterns)
+
+                # Add context files to the context_items list, ensuring no duplicates.
+                # Skip the file currently being edited and any files already included in context_files.
+
+                # Don't emit the edit file, and the content did not change    
+                for context_file_cyle in context_files_cycle:
+                    skip = False
+
+                    if context_file_cyle['filename'] == file_name:
+                        skipe = True                    
+                    for context_file in context_files:
+                        if context_file['filename'] == context_file_cyle['filename'] and context_file['modified_time'] == context_file_cyle['modified_time']:
+                            skip = True
+
+                    if ( not skip ):
+                        context_items.append('-'*80) 
+                        context_items.append(f"File: {context_file_cyle['filename']} Revision: {retry_count}")
+                        context_items.append('-'*80) 
+                        context_items.append(context_file_cyle["content"])
+
+                        context_files.append(context_file_cyle)
 
                 full_prompt = resolved_instruction + "\n" + "\n".join(context_items)
 
                 # Log prompt
-                file_loggers = self.logger_manager.setup_file_loggers(logger.name + f".{retry_count}", file_name)
+                file_loggers = self.logger_manager.setup_file_loggers(logger.name, file_name,retry_count)
+
                 file_loggers["prompt"].info(full_prompt)
 
-                # Get LLM response
-                llm_response = self.llm_end_point.get_response([{"role": "user", "content": full_prompt}], model=model)
+                # Get LLM response from API.
+                prompt.append({"role": "user", "content": full_prompt})
+                llm_response = self.llm_end_point.get_response(prompt, model=model)
 
-                # Log response
                 file_loggers["output"].info(llm_response)
 
                 content_to_write = self.extract_content_to_write(file_name, llm_response)
@@ -409,9 +441,9 @@ class LLMFeedbackEditExecutor(CommandExecutor):
                     success = True
             except Exception as e:
                 logger.error(f"Error during feedback-editing of '{file_name}': {e}")
-                break
+                raise 
 
         if success:
             logger.info(f"Feedback-editing completed successfully for '{file_name}'.")
         else:
-            logger.error(f"Feedback-editing failed for '{file_name}' after {max_retries} attempts.")
+            raise LLMRunError(f"Feedback-editing failed for '{file_name}' after {max_retries} attempts.")

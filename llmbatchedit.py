@@ -166,7 +166,7 @@ def main():
                 llm_end_point=llm_end_point,
                 macro_resolver=macro_resolver,
                 context_manager=context_manager,
-                max_workers=10  # Adjust based on your system and OpenAI rate limits
+                max_workers=3  # Adjust based on your system and OpenAI rate limits
             )
             command_executor.execute()
 

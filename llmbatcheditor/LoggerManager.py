@@ -47,13 +47,18 @@ class LoggerManager:
 
         return logger
 
-    def setup_file_loggers(self, command_id: str, file_name: str) -> Dict[str, logging.Logger]:
+    def setup_file_loggers(self, command_id: str, file_name: str, cycle:int = 0) -> Dict[str, logging.Logger]:
         """
         Sets up loggers for LLM prompt and output for a specific file.
         Returns a dictionary with 'prompt' and 'output' loggers.
         """
-        prompt_logger = logging.getLogger(f"{command_id}.{file_name}.llm-prompt")
-        output_logger = logging.getLogger(f"{command_id}.{file_name}.llm-output")
+
+        if ( cycle <= 0):
+            prompt_logger = logging.getLogger(f"{command_id}.{file_name}.llm-prompt")
+            output_logger = logging.getLogger(f"{command_id}.{file_name}.llm-output")
+        else:
+            prompt_logger = logging.getLogger(f"{command_id}.{file_name}.{cycle}.llm-prompt")
+            output_logger = logging.getLogger(f"{command_id}.{file_name}.{cycle}.llm-output")
 
         # Remove existing handlers
         if prompt_logger.hasHandlers():
@@ -62,7 +67,11 @@ class LoggerManager:
             output_logger.handlers.clear()
 
         # Prompt logger
-        prompt_file = self.log_dir / f"{command_id}.{file_name}.llm-prompt.txt"
+        if ( cycle <= 0):
+            prompt_file = self.log_dir / f"{command_id}.{file_name}.llm-prompt.txt"
+        else:
+            prompt_file = self.log_dir / f"{command_id}.{file_name}.{cycle}.llm-prompt.txt"
+            
         ph = logging.FileHandler(prompt_file, mode='w', encoding='utf-8')
         ph.setLevel(logging.DEBUG)
         ph.setFormatter(logging.Formatter("%(message)s"))
@@ -70,7 +79,11 @@ class LoggerManager:
         prompt_logger.propagate = False
 
         # Output logger
-        output_file = self.log_dir / f"{command_id}.{file_name}.llm-output.txt"
+        if ( cycle <= 0):
+            output_file = self.log_dir / f"{command_id}.{file_name}.llm-output.txt"
+        else:
+            output_file = self.log_dir / f"{command_id}.{file_name}.{cycle}.llm-output.txt"
+            
         oh = logging.FileHandler(output_file, mode='w', encoding='utf-8')
         oh.setLevel(logging.DEBUG)
         oh.setFormatter(logging.Formatter("%(message)s"))
@@ -78,3 +91,10 @@ class LoggerManager:
         output_logger.propagate = False
 
         return {"prompt": prompt_logger, "output": output_logger}
+
+    def delete_command_logs(self, command_id: str, file_name: str):
+        """
+        Deletes any log file that starts with {command_id}.{file_name}.
+        """
+        for log_file in self.log_dir.glob(f"{command_id}.{file_name}.*"):
+            log_file.unlink()

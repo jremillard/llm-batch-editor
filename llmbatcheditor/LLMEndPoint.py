@@ -68,10 +68,7 @@ class LLMEndPoint:
                 logging.debug(f"Received response from LLM: {content[:50]}...")
 
                 # Overwrite the last item as the assistant response
-                if model not in LLMEndPoint.models_without_role_key:
-                    prompt[-1] = {"role": "assistant", "content": content}
-                else:
-                    prompt[-1] = {"content": content}
+                prompt.append({"role": "assistant", "content": content})
 
                 return content
 

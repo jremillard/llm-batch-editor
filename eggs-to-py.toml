@@ -7,8 +7,15 @@ directory = "output/eggs/"
 model = "o1-preview"
 prompt_model="o1-preview"
 
+#model = "o1-mini"
+#prompt_model="o1-mini"
+
 #model = "gpt-4o-mini"
+#prompt_model="gpt-4o-mini"
+
 #model = "gpt-4o"
+#prompt_model="gpt-4o"
+
 #model = "claude-3-5-sonnet-latest"
 #model = "claude-3-5-haiku-latest"
 
@@ -76,6 +83,44 @@ Apply Python type hinting to all functions and variables for improved code clari
 """
 
 [[commands]]
+id = "create_eggsformat_ksy"
+type = "llm_create"
+target_files = ["charname.ksy","charnum.ksy","itemnam.ksy","itemnum.ksy","looksmar.ksy","room.ksy","sayings.ksy","talkstr.ksy"]
+instruction = """
+Create a {{filename}} formatted as kaitai struct file based on the {{filename_base}}.EGG and 
+supplied Turbo Pascal code used to ready and write the EGG File.
+For each field in the Kaitai Struct, document the corresponding variable name, type, and structure from the Pascal code. 
+Include comments describing the purpose and role of each field in the file content.
+
+All strings are saved as fixed length, length bytes,text,padding. Document all the strings like this.
+
+85 character string example, adjust as needed for other string lengths.
+
+meta:
+  id: pascal_string_fixed_85
+  endian: le
+seq:
+  - id: length
+    type: u1
+    doc: Length of the string (excluding length byte).
+  - id: content
+    type: str
+    size: length
+    size-eos: 85
+    encoding: ASCII
+  - id: padding
+    type: bytes
+    size: 85 - length
+    if: length < 85
+instances:
+  value:
+    value: content
+
+
+"""
+context = ["*.pas", "*.egg" ]
+
+[[commands]]
 id = "create_converteggstocsv"
 type = "llm_create"
 target_files = ["converteggstocsv.py"]
@@ -84,12 +129,11 @@ Write a Python program {{filename}} to convert the binary CHARNAM.EGG,CHARNUM.EG
 ITEMNUM.EGG, LOOKSMAR.EGG, ROOM.EGG, SAYINGS.EGG, TALKNUM.EGG, TALKSTR.EGG files into CSV text files. 
 When it makes sense, merge multiple EGG files into one CSV file.
 The program output should include status information to make debugging easy.
-The strings are encoded as Pascal string.
-Saved pascal strings are not null-terminated. The string length is stored at the start of the string as a unsigned byte.
 The program should have a one function for each CSV file created.
 The strings in the EGG files include quotes, commas, and spaces that needs to be escaped in the CSV.
+Use only built in python moduels.
 """
-context = ["*.pas", "*.egg" ]
+context = ["*.ksy","*.egg","*.pas" ]
 
 [[commands]]
 id = "run_converteggstocsv"
@@ -98,12 +142,12 @@ target_files = ["converteggstocsv.py"]
 instruction = """
 Correct any errors in {{filename}}.
 Ensure that all CSV files are correct and complete compared to the EGG files.
-Output the entire file {{filename}} with correction if any problems are found in the CSVs. 
-Otherwise don't respond with any python code.
+Output a summary of the problem and a summary of the corrections without including any sample code blocks.
+Output the entire file {{filename}} with the correction only if problems are found. Do not emit code blocks if no problems were found.
 """
 test_commands = ["del *.csv", "python converteggstocsv.py"]
-max_retries = 4
-context = ["*.csv", "*.egg","*.pas" ]
+max_retries = 8
+context = ["*.csv","*.ksy","*.egg" ]
 
 [[commands]]
 id = "create_globals"

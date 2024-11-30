@@ -2,6 +2,7 @@ import os
 import hashlib
 from typing import List, Dict, Any, Tuple
 from llmbatcheditor.LLMEndPoint import LLMEndPoint
+from pprint import pformat
 
 class LLMEndPointCached(LLMEndPoint):
     def __init__(self, cache_dir: str, max_retries: int = 3, retry_delay: int = 5):
@@ -10,7 +11,7 @@ class LLMEndPointCached(LLMEndPoint):
         os.makedirs(self.cache_dir, exist_ok=True)
 
     def get_response(self, prompt: List[Dict[str, str]], model: str) -> Tuple[str, bool]:
-        prompt_str = str(prompt) + model
+        prompt_str = model + "\n" + pformat(prompt)
         md5_hash = hashlib.md5(prompt_str.encode('utf-8')).hexdigest()
         prompt_file = os.path.join(self.cache_dir, f"{md5_hash}.prompt.txt")
         response_file = os.path.join(self.cache_dir, f"{md5_hash}.response.txt")
