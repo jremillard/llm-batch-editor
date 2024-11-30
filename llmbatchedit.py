@@ -143,7 +143,7 @@ def main():
         context_manager = ContextManager(target_directory)
 
         # Initialize LLM End Point
-        llm_end_point = LLMEndPointCached(cache_dir=output_dir)
+        llm_end_point = LLMEndPointCached(cache_dir=Path(f"{output_dir}/cache"))
 
         # Parse command_ids and map to commands
         commands = data.get("commands", [])

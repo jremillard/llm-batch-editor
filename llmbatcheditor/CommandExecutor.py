@@ -147,16 +147,23 @@ class LLMCreateExecutor(CommandExecutor):
             prompt_model: str, 
             logger: logging.Logger):
         logger.info(f"Creating file '{file_name}'.")
+        
+        # expand shared prompts, then edit the instruction with the prompt model 
+        llm_edited_instruction = self.preedit_instruction(
+            self.macro_resolver.resolve_shared_prompts(instruction), 
+            model=prompt_model)
+
+        # Resolve placeholders in the edited intructions
         placeholders = {
             "filename": file_name,
             "filename_base": os.path.splitext(file_name)[0],
             "filelist": self.context_manager.generate_filelist()
-        }
-        preedited_instruction = self.preedit_instruction(instruction, model=prompt_model)
-        resolved_instruction = self.macro_resolver.resolve(preedited_instruction, placeholders)
+        }        
+        resolved_instruction = self.macro_resolver.resolve_placeholders(llm_edited_instruction, placeholders)
 
-        # Gather context
+        # Gather file context 
         context_items = self.context_manager.gather_context(context_patterns)
+
         # Combine context into a single string or structure as needed
         full_prompt = resolved_instruction + "\n" + "\n".join(context_items)
 
@@ -242,13 +249,18 @@ class LLMEditExecutor(CommandExecutor):
             logger.error(f"Failed to read file '{file_name}': {e}")
             return
 
+        # expand shared prompts, then edit the instruction with the prompt model 
+        llm_edited_instruction = self.preedit_instruction(
+            self.macro_resolver.resolve_shared_prompts(instruction), 
+            model=prompt_model)
+
+        # Resolve placeholders in the edited intructions
         placeholders = {
             "filename": file_name,
             "filename_base": os.path.splitext(file_name)[0],
             "filelist": self.context_manager.generate_filelist()
         }
-        preedited_instruction = self.preedit_instruction(instruction, model=prompt_model)
-        resolved_instruction = self.macro_resolver.resolve(preedited_instruction, placeholders)
+        resolved_instruction = self.macro_resolver.resolve_placeholders(llm_edited_instruction, placeholders)
 
         # Gather context, including the current file content
         context_items = []
@@ -364,13 +376,18 @@ class LLMFeedbackEditExecutor(CommandExecutor):
 
                 retry_count += 1
 
+                # expand shared prompts, then edit the instruction with the prompt model 
+                llm_edited_instruction = self.preedit_instruction(
+                    self.macro_resolver.resolve_shared_prompts(instruction), 
+                    model=prompt_model)
+
+                # Resolve placeholders in the edited intructions
                 placeholders = {
                     "filename": file_name,
                     "filename_base": os.path.splitext(file_name)[0],
                     "filelist": self.context_manager.generate_filelist()
                 }
-                preedited_instruction = self.preedit_instruction(instruction, prompt_model)
-                resolved_instruction = self.macro_resolver.resolve(preedited_instruction, placeholders)
+                resolved_instruction = self.macro_resolver.resolve_placeholders(llm_edited_instruction, placeholders)
 
                 context_items = []
 

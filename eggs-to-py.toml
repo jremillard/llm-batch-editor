@@ -75,7 +75,8 @@ complete_conversion = """
 pylint = """
 Fix errors in {{filename}}.
 Output the entire {{filename}} file if any problems are found by pylint, do not output just the corrected code.
-If no problems are found in the {{filename}}, don't output any code blocks.
+Do not include instructions for installing pylint, or running pylint. Only Instructions for interpreting the output.
+If no problems are found in the {{filename}}, don't output any code blocks, do not suggest other improvements.
 """
 
 use_type_hinting = """
@@ -180,18 +181,23 @@ target_files = ["globals.py"]
 instruction = """
 Update {{filename}} to include additional constants to help eliminate magic numbers from the code.
 
-**Add** descriptive constants for all rooms, characters, and items based on the provided CSV files and PAS files to {{filename}}.
+Add descriptive constants for all rooms, characters, and items based on the provided CSV files and PAS files to {{filename}}.
 
 **Rooms**: Prefix with `ROOM_<ROOM_NUMBER>_DESCRIPTION`. 
-    Generate constants for **all rooms**. 
+    Generate constants for all rooms.
     ROOM_NUMBER is the room numerical ID [0-9]*. 
-    **Reference** the roomdescrip PASCAL function in roomdes.pas file to create accurate room constant names. Double check this.
+    Validate that no rooms are omitted.
+    Reference the roomdescrip PASCAL function in roomdes.pas file to create accurate room constant names. 
 
 **Characters**: Prefix with `CHAR_<CHARACTER_NUMBER>_DESCRIPTION`. 
   CHARACTER_NUMBER is the item numerical ID [0-9]*
+  Generate constants for all characters.
+  Validate that no characters are omitted.
 
 **Items**: Prefix with `ITEM_<ITEM_NUMBER>_DESCRIPTION`. 
   ITEM_NUMBER is the item numerical ID [0-9]*
+  Generate constants for all items.
+  Validate that no items are omitted.
 
 **Directions**: Prefix with `DIR_`.
 
@@ -218,7 +224,7 @@ Update {{filename}} to include additional constants to help eliminate magic numb
 
 {{use_type_hinting}}
 """
-context = ["*.pas", "*.csv"]
+context = ["roomdes.pas", "*.csv"]
 
 
 [[commands]]
@@ -237,7 +243,7 @@ id = "create_midlevel"
 type = "llm_create"
 target_files = [   
     "bang.py", 
-    "burn.py", "cream.py", "debug.py", "help.py", "move.py",
+    "burn.py", "cream.py", "debug.py", "help.py", "move.py","take.py",
     "roomdes.py", "saw.py", "drop.py", "saywhat.py", "throw.py", "tie.py", 
     "setup.py"
 ]
@@ -265,7 +271,7 @@ Using the file {{filename_base}}.PAS as a reference, create a Python module name
 {{constants_replacement}}
 {{use_type_hinting}}
 """
-context = ["*.pas", "bang.py", "burn.py", "cream.py", "debug.py", "help.py", "move.py",
+context = ["*.pas", "bang.py", "burn.py", "cream.py", "debug.py", "help.py", "move.py", "take.py",
     "roomdes.py", "saw.py", "drop.py", "saywhat.py", "throw.py", "tie.py", 
     "setup.py", "globals.py","*.csv"]
 
@@ -274,7 +280,7 @@ context = ["*.pas", "bang.py", "burn.py", "cream.py", "debug.py", "help.py", "mo
 id = "lint_py_files"
 type = "llm_feedback_edit"
 target_files = [
-    "bang.py", "burn.py", "cream.py", "debug.py", "help.py", "move.py",
+    "bang.py", "burn.py", "cream.py", "debug.py", "help.py", "move.py", "take.py",
     "roomdes.py", "saw.py", "drop.py", "saywhat.py", "throw.py", "tie.py",
     "eggs.py"
 ]
