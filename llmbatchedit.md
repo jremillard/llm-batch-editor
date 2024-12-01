@@ -2,7 +2,8 @@
 
 ## Purpose
 
-`llmbatchedit.py` Uses Large Language Models (LLMs) to automate the creation and editing of text files. The sweet spot is for performing repeatable, automated, multi step operations across many files. The configuration for these operations is specified in an instruction file (e.g., `instructions.toml`).
+`llmbatchedit.py` uses Large Language Models (LLMs) to automate the creation and editing of text files. The sweet spot is for performing repeatable, automated, multi-step operations across many files. The configuration for these operations is specified in an instruction file (e.g., `instructions.toml`).
+
 ---
 
 ## Command-Line Interface
@@ -18,18 +19,19 @@ python llmbatchedit.py instructions.toml command [command2] ...
 **Command Syntax:**
 
 - **Single command** (`ID`): Runs only command `ID`.
-- **Multi commands** (`ID1 ID2 ID3`): Runs the three commands.
+- **Multiple commands** (`ID1 ID2 ID3`): Runs the three commands.
 - **Range** (`ID1-ID3`): Runs commands from `ID1` to `ID3`, inclusive.
-- **Open-Ended Range** (`ID-`): Runs commands from `ID` to the last command in the instruction file
+- **Open-Ended Range** (`ID-`): Runs commands from `ID` to the last command in the instruction file.
 
 ---
+
 ## Instruction File Structure (`instructions.toml`)
 
-The instruction file is structured using [TOML](https://toml.io/en/) (Tom's Obvious, Minimal Language). The top level directives are, **target**, **defaults**, **shared prompts (macros)**, and an ordered list of **commands**.
+The instruction file is structured using [TOML](https://toml.io/en/) (Tom's Obvious, Minimal Language). The top-level directives are **target**, **defaults**, **shared prompts (macros)**, and an ordered list of **commands**.
 
 ### 1. Target
 
-- **`target.directory`** Specifies the output directory for the project. The target directory will be created if it does not exist. Note, software will edit and overwrite the files in this directory, please keep a backup or use revision control.
+- **`target.directory`**: Specifies the output directory for the project. The target directory will be created if it does not exist. Note that the software will edit and overwrite the files in this directory; please keep a backup or use revision control.
 
 ```toml
 [target]
@@ -46,9 +48,9 @@ directory = "output-directory"
 
 **Purpose:** Define default settings that apply to all commands unless explicitly overridden. This promotes consistency and reduces redundancy in the configuration.
 
-- **`defaults.model`** Specifies the default LLM to use for commands that do not explicitly define a `model`. This setting ensures that all commands have a consistent LLM unless overridden individually.
+- **`defaults.model`**: Specifies the default LLM to use for commands that do not explicitly define a `model`. This setting ensures that all commands have a consistent LLM unless overridden individually.
 
-- **`defaults.prompt_model`** Specifies the default LLM to use for pre-editing instructions before they are resolved and sent to the main `model`. 
+- **`defaults.prompt_model`**: Specifies the default LLM to use for pre-editing instructions before they are resolved and sent to the main `model`. 
 
 ```toml
 [target]
@@ -61,7 +63,6 @@ prompt_model = "gpt-4o"
 [[commands]]
 ...
 ```
-
 
 ### 3. Commands
 
@@ -98,7 +99,7 @@ context = ["*.json", "*.md"]
     - `llm_edit`
     - `llm_feedback_edit`
 
-    See next section for details on the command types.
+    See the next section for details on the command types.
 
 - **`command.target_files`**
   - **Type:** Array of strings
@@ -107,7 +108,7 @@ context = ["*.json", "*.md"]
 
 - **`command.instruction`**
   - **Type:** Multiline String with Macros
-  - **Description:** Instructions to be provided to the LLM. May contain placeholders like `{{filename}}`,`{{filename_base}}` and macros like `{{macro_name}}` which will be replaced with shared prompt snippets.
+  - **Description:** Instructions to be provided to the LLM. May contain placeholders like `{{filename}}`, `{{filename_base}}`, and macros like `{{macro_name}}`, which will be replaced with shared prompt snippets.
   - **Example:**
     ```toml
     instruction = """
@@ -116,20 +117,21 @@ context = ["*.json", "*.md"]
     {{commenting}}
     """
     ```
+
 - **`command.context`**
   - **Type:** Array of strings
   - **Description:** Specifies files or items to include in the LLM context. Context is a list allowing multiple files to be included in the context.
   - **Example:** `["*.json", "*.md"]`
 
-- **`command.model`** *(Optional)* Specifies the LLM to use. If omitted, the `defaults.model` value is used.
+- **`command.model`** *(Optional)*: Specifies the LLM to use. If omitted, the `defaults.model` value is used.
 
-- **`command.prompt_model`** *(Optional)* Specifies the LLM to use for prompt rewriting. If omitted, the `defaults.prompt_model` value is used.
+- **`command.prompt_model`** *(Optional)*: Specifies the LLM to use for prompt rewriting. If omitted, the `defaults.prompt_model` value is used.
 
 #### Command Types and Parameters
 
 ##### A. LLM Create Commands (`command.type = llm_create`)
 
-**Purpose:** Use a LLM to create new files based on provided instructions and context. The code block in the language model output is extracted and used to generate the content of the new target files.
+**Purpose:** Use an LLM to create new files based on provided instructions and context. The code block in the language model output is extracted and used to generate the content of the new target files.
 
 ##### B. LLM Edit Commands (`command.type = llm_edit`)
 
@@ -141,7 +143,7 @@ context = ["*.json", "*.md"]
 
 - **`command.test_commands`**
   - **Type:** Array of strings
-  - **Description:** Commands to execute that test the code. May include the `{{filename}}` placeholder. Error return codes from test_commands do not result in an error in the processing. The current directory of the scripts is the target directory.
+  - **Description:** Commands to execute that test the code. May include the `{{filename}}` placeholder. Error return codes from `test_commands` do not result in an error in the processing. The current directory of the scripts is the target directory.
   - **Example:** `["python {{filename}}"]`
 
 - **`command.max_retries`**
@@ -150,13 +152,13 @@ context = ["*.json", "*.md"]
 
 ## Context Handling
 
-All the commmand types support the `command.context` tag. The context provides additional information to the LLM to improve performance of the task. The listed files are presented in their entirety to the LLM in the prompt. The script does not have any RAG functionality.
+All command types support the `command.context` tag. The context provides additional information to the LLM to improve the performance of the task. The listed files are presented in their entirety to the LLM in the prompt. The script does not have any RAG functionality.
 
 **Context Items:**
 
 - **File Patterns**: e.g., `*.py`, `docs/*.md` (patterns are resolved relative to the target directory).
 - **Specific Files**: e.g., `utils.py`
-- **Special Tokens (enclosed in curly braces):** e.g. {{filelist}}
+- **Special Tokens (enclosed in curly braces):** e.g., `{{filelist}}`
 
 **Example Usage in Commands:**
 ```toml
@@ -164,23 +166,22 @@ context = ["*.py", "*.md", "{{filelist}}"]
 ```
 
 ### 3. Macros
+
 Instructions and context can include these macros. 
 
 **Built-in Macros:**
 - **`{{filename}}`**: Automatically replaced with the current target file's name during command execution. Used in instructions and shell commands.
 - **`{{filename_base}}`**: Automatically replaced with the current target file's name stem during command execution. Used in instructions and shell commands.
-- **`{{filelist}}`**: A generated list of files in the target directory with their sizes. The `__pycache__` directories are excluded.  
-  first showing the ASCII version of the file, followed by the hex version of the 
-  file. The program includes a built in list of binary file extensions.
+- **`{{filelist}}`**: A generated list of files in the target directory with their sizes. The `__pycache__` directories are excluded. The program includes a built-in list of binary file extensions.
 
-### 3. Shared Prompts
+### 4. Shared Prompts
 
 **Purpose:** Define reusable prompt snippets that can be embedded within instruction texts. This allows for fine-grained reuse of common instruction components without requiring full prompt duplication.
 
 **Guidelines for Custom Macros:**
 - **Naming Conventions:** Use descriptive names in lowercase with underscores (e.g., `error_handling`).
 - **Avoid Conflicts:** Do **not** define a shared prompt with the same name as any built-in macro (`file`, `filename`, `filelist`). Attempting to do so will result in a fatal error.
-- **Placeholders within Macros:** Custom macros can include placeholders like `{{filename}}`,`{{filename_base}}`, or `{{filelist}}`, which will be substituted during execution.
+- **Placeholders within Macros:** Custom macros can include placeholders like `{{filename}}`, `{{filename_base}}`, or `{{filelist}}`, which will be substituted during execution.
 
 ```toml
 [shared_prompts]
@@ -203,13 +204,13 @@ Within the `instruction` field of commands, shared prompts can be included using
 
 **Supported Syntax for Macros:**
 - **Inline Macros:** `{{macro_name}}` can be placed anywhere within the instruction text.
-- **Multiple Instances:** The same macro can be used multiple times within an instruction. However, shared prompts can not include other shared prompts.
+- **Multiple Instances:** The same macro can be used multiple times within an instruction. However, shared prompts cannot include other shared prompts.
 
 **Instruction Placeholder Resolution Process:**
 
 1. **Identify Macros:** Scan the `instruction` text for `{{macro_name}}` patterns.
 2. **Replace Shared Prompts:** Replace each `{{macro_name}}` with its corresponding shared prompt content defined in `[shared_prompts]`.
-3. **Substitute Placeholders:** After shared prompts are expanded, substitute built in macros like `{{filename}}`with their respective values based on the command context.
+3. **Substitute Placeholders:** After shared prompts are expanded, substitute built-in macros like `{{filename}}` with their respective values based on the command context.
 4. **Final Instruction:** The fully resolved instruction is then sent to the LLM for rewriting.
 
 **Example Resolution:**
@@ -231,10 +232,10 @@ instruction = """
 ```
 
 **Step-by-Step Resolution:**
-1. Replace `{{python_convert}}` "with Write a Python program {{filename}} that converts all JSON files in the directory into CSV files."
+1. Replace `{{python_convert}}` with "Write a Python program {{filename}} that converts all JSON files in the directory into CSV files."
 2. Replace `{{error_handling}}` with "Ensure proper error handling is implemented."
 3. Replace `{{commenting}}` with "Include proper comments explaining the code."
-4. Replace `{{filename}}` with the target file's name (e.g., `converter.py`). filename will processed last in case it was included as part of a shared prompt.
+4. Replace `{{filename}}` with the target file's name (e.g., `converter.py`). The filename will be processed last in case it was included as part of a shared prompt.
 
 **Instruction:**
 ```
@@ -243,7 +244,8 @@ Ensure proper error handling is implemented.
 Include proper comments explaining the code.
 ```
 
-The instructions are then sent to the LLM to be rewritten as a check list.
+The instructions are then sent to the LLM to be rewritten as a checklist.
+
 ---
 
 ## Sample Instruction Files
@@ -251,7 +253,6 @@ The instructions are then sent to the LLM to be rewritten as a check list.
 ### **Instructions with Macros and Enhanced `{{filename}}` Token (`sample-instructions.toml`)**
 
 ```toml
-
 [target]
 directory = "output"
 
@@ -390,7 +391,7 @@ target_files = ["Class1.cs", "Class2.cs", "Utils.cs"]
 instruction = """
 {{convert_cpp_to_cs}}
 """
-context = ["*.cpp" ]
+context = ["*.cpp"]
 
 [[commands]]
 id = "feedback_edit_cs_classes"
