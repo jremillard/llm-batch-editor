@@ -10,7 +10,7 @@ This project was created to explore the limits of current AI models use in fully
 
 Licensed under the MIT License.
 
-## Instruction toml file.
+## Instruction File
 
 Create file1.py and file2.py by porting pascal file1.pas and file2.pas to python, use gpt-4o, use the directory called output as the working directory.
 
