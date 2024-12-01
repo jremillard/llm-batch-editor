@@ -1,0 +1,76 @@
+# instructions for llmbatchedit.py to convert EGGS 1989 PASCAL program to python 3.
+
+[target]
+directory = "output/eggs2/"
+
+[defaults]
+model = "o1-preview"
+prompt_model="o1-preview"
+
+#model = "o1-mini"
+#prompt_model="o1-mini"
+
+#model = "gpt-4o-mini"
+#prompt_model="gpt-4o-mini"
+
+#model = "gpt-4o"
+#prompt_model="gpt-4o"
+
+#model = "claude-3-5-sonnet-latest"
+#model = "claude-3-5-haiku-latest"
+
+[shared_prompts]
+# Reusable instruction snippets to promote consistency and reduce redundancy
+
+[[commands]]
+id = "create_llm_batch"
+type = "llm_create"
+target_files = ["eggs-to-py.toml"]
+instruction = """
+Create a `eggs-to-py.toml` llmbatchedit command file to convert the EGGS 1989 Pascal program to Python 3, following the specified requirements.
+
+- **Command File Configuration:**
+  - Do not include the Pascal code in the command file.
+  - Set the target directory to `output/eggs2/`.
+  - Use the `o1-preview` model.
+  - Leave the `o1-mini` model commented out.
+  - Use shared prompts for any prompts needed in multiple commands to enhance consistency and maintainability.
+
+- **Command Order:**
+  - Perform the global variables refactor first.
+  - Convert EGG files to CSV files next.
+  - Proceed with the conversion of the Pascal code to Python 3 using the CSV and and global refactor module.
+
+- **Context Inclusion:**
+  - Include the CSV files and global refactor module in the context when needed.
+  - Verify that the context provides all necessary files for the commands.
+    - Include additional files in the context if unsure; it's better to have too many than too few.
+      
+- **Pascal to Python Conversion:**
+  - Include commands in the TOML file to convert all the Pascal code to Python 3.
+  - Refactor global variables into a separate module before other conversions.
+    - Ensure other commands can use the globals module during the conversion.
+  - use type hinting.
+  - access the global variables through the `globals` module. Example import globals as gbl in the python code.
+  - Generate the Python code to read CSV files instead of EGG files.
+  - Verify that every function and procedure in the Pascal file has a corresponding converted function in the Python module.
+  - Maintain exact names without converting them to Pythonic `snake_case` or any other naming style, except for `cont`.
+    - *Example*: A Pascal function named `GunChar` should remain `GunChar` in Python.
+
+- **Docstrings and Documentation**
+  - Create both function-level and file-level docstrings that reference the original Pascal code filename.
+  - Ensure all docstrings adhere to [PEP 257](https://www.python.org/dev/peps/pep-0257/) conventions.
+  - File-level docstrings must only summarize the file and must not list all the functions in the module.
+  - Function-level docstrings must include a summary of what the function does and references to the original Pascal function.
+  
+- **EGG Files Conversion:**
+  - Include commands to convert the EGG binary files to CSV files.
+    - Review the Pascal code to assist in converting binary EGG files.
+  - Ensure the conversion of EGG files to CSV files is done before converting the Pascal code to Python 3.
+    - This ensures that the Python code can read the CSV files.
+
+- **Code Quality Checks:**
+  - Use `pylint` to check the Python code for hard errors.
+  - Don't check for warnings or styles issues.
+"""
+context = ["llmbatchedit.md","*.pas", "*.egg" ]

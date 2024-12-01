@@ -4,15 +4,38 @@ An AI-powered tool to automate batch creation and editing of text files/source c
 
 ## Purpose
 
-`llmbatchedit.py` is a Python script designed to interpret and execute commands from an instruction file (e.g., `instructions.toml`). It automates code generation, editing, and testing tasks by leveraging Large Language Models (LLMs) and shell commands.
+`llmbatchedit.py` Uses Large Language Models (LLMs) to automate the creation and editing of text files. The sweet spot is for performing repeatable, automated, multi step operations across many files. The configuration for these operations is specified in an instruction file (e.g., `instructions.toml`).
 
-This project was created to explore the limits of current AI models in fully automating software development.
+This project was created to explore the limits of current AI models use in fully automating complex software development tasks.
 
 Licensed under the MIT License.
 
-## Instructions
+## Instruction toml file.
 
-The `instructions.toml` file contains a series of LLM commands that `llmbatchedit.py` interprets and executes. These commands can include tasks such as generating new code, editing existing code, running tests, and executing scripts. The program supports context generation, allowing the LLM to maintain state across multiple commands. Modular prompts enable the reuse of common command patterns. Concurrent execution allows multiple commands to be processed simultaneously. 
+Create file1.py and file2.py by porting pascal file1.pas and file2.pas to python, use gpt-4o, use the directory called output as the working directory.
+
+```toml
+[target]
+directory = "output"
+
+[defaults]
+model = "gpt-4o"
+prompt_model = "gpt-4o" 
+
+[shared_prompts]
+
+[[commands]]
+id = "create_python"
+type = "llm_create"
+target_files = ["file1.py","file2.py"]
+instruction = """
+Convert the file {{filename_base}}.pas to file `{{filename_base}}.py`.
+The converted file should use Python 3.
+Verify that every function and procedure has a corresponding converted function.
+Use type python hinting.
+"""
+context = ["*.pas", "*.csv"]
+```
 
 See `llmbatchedit.md` for full documentation on the `instructions.toml` and `llmbatchedit.py` command line arguments.
 
