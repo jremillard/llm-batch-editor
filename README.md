@@ -54,4 +54,15 @@ See `llmbatchedit.md` for full documentation on the `instructions.toml` and `llm
 
 **Usage:**
 ```bash
-python [llmbatchedit.py] instructions.toml command1-ids [command2-ids] ...
+python llmbatchedit.py instructions.toml command1-ids [command2-ids] ...
+```
+
+## Why?
+
+Since GPT-3.5 was released in November 2022, I've been attempting to automatically port a 4000 line personal program I wrote in Turbo Pascal back in 1989 to Python. It's an old-school text adventure game inspired by Zork and Adventure, set in my childhood neighborhood during Halloween 1988. It serves as an interesting test case because the source code is not available on the Internet, it uses the obsolete language (Turbo Pascal), and it runs on the obsolete operating system (MS-DOS).
+
+This is my third attempt across different LLM generations. The first two attempts were complete failures—primarily due to the small context windows and the models not being advanced enough. However, as of December 2024, this third attempt, using the o1-preview model, is remarkably close to success, requiring minimal editing on my part.
+
+The main challenge now lies with one particularly long, 1,000+ line source file. The model struggles to reliably and repeatedly convert the long file without skipping functions or stopping. While some kind of splitting mechanism could be added, I would rather wait for the next generation of models to be released to see if the port will "just work" with this simple system for creating and editing files. 
+
+It feels like a fully automated port will succeed soon.
